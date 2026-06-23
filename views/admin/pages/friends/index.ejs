@@ -1,6 +1,26 @@
+<%
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function userCellHtml(u){
+    if (!u) return '-';
+    const av = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+    const nm = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+    const initials = (nm || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+    const img = av
+      ? `<img src="${esc(av)}" class="user-avatar" alt="">`
+      : `<span class="user-avatar-fallback">${esc(initials)}</span>`;
+    return `<a href="/admin/users/${u.id}" class="user-cell">${img}<span class="user-name">${esc(nm)}</span></a>`;
+  }
+  function statusPill(s){
+    const map = { PENDING: 'status-pending', ACCEPTED: 'status-accepted', DECLINED: 'status-declined', BLOCKED: 'status-blocked' };
+    const cls = map[s] || 'status-inactive';
+    const label = s ? s.charAt(0) + s.slice(1).toLowerCase() : '-';
+    return `<span class="status-pill ${cls}">${label}</span>`;
+  }
+%>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div class="d-flex gap-2 align-items-center">
-    <span class="text-muted"><%= total %> friendships</span>
+    <span class="text-muted me-1"><%= total %> friendships</span>
     <a href="/admin/friends" class="btn btn-sm <%= !statusFilter ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
     <a href="/admin/friends?status=PENDING" class="btn btn-sm <%= statusFilter === 'PENDING' ? 'btn-warning' : 'btn-outline-warning' %>">Pending</a>
     <a href="/admin/friends?status=ACCEPTED" class="btn btn-sm <%= statusFilter === 'ACCEPTED' ? 'btn-success' : 'btn-outline-success' %>">Accepted</a>
@@ -10,27 +30,20 @@
 
 <div class="card">
   <div class="card-body p-0">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 align-middle">
       <thead>
-        <tr><th>ID</th><th>Requester</th><th>Receiver</th><th>Status</th><th>Requested</th><th>Accepted</th><th>Actions</th></tr>
+        <tr><th>Requester</th><th>Receiver</th><th>Status</th><th>Requested</th><th>Accepted</th><th class="text-end">Actions</th></tr>
       </thead>
       <tbody>
         <% friendships.forEach(f => { %>
           <tr>
-            <td><%= f.id %></td>
-            <td><a href="/admin/users/<%= f.requester.id %>"><%= f.requester.username %></a></td>
-            <td><a href="/admin/users/<%= f.receiver.id %>"><%= f.receiver.username %></a></td>
-            <td>
-              <% if (f.status === 'PENDING') { %>
-                <span class="badge bg-warning text-dark">Pending</span>
-              <% } else { %>
-                <span class="badge bg-success">Accepted</span>
-              <% } %>
-            </td>
+            <td><%- userCellHtml(f.requester) %></td>
+            <td><%- userCellHtml(f.receiver) %></td>
+            <td><%- statusPill(f.status) %></td>
             <td><%= f.requestedAt.toLocaleDateString() %></td>
             <td><%= f.acceptedAt ? f.acceptedAt.toLocaleDateString() : '-' %></td>
             <td>
-              <div class="d-flex gap-1">
+              <div class="d-flex gap-1 justify-content-end">
                 <% if (f.status === 'PENDING') { %>
                   <form method="POST" action="/admin/friends/<%= f.id %>/approve" style="display:inline">
                     <button class="btn btn-sm btn-outline-success">Approve</button>
@@ -48,7 +61,7 @@
           </tr>
         <% }) %>
         <% if (friendships.length === 0) { %>
-          <tr><td colspan="7" class="text-center text-muted py-3">No friendships found.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-3">No friendships found.</td></tr>
         <% } %>
       </tbody>
     </table>

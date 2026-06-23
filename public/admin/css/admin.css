@@ -365,11 +365,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 }
 .community-hero { width: 72px; height: 72px; border-radius: 14px; object-fit: cover; font-size: 1.5rem; }
 
-/* Status pills */
-.status-pill { font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+/* Status pills — consistent across the whole panel */
+.status-pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
 .status-active   { background: rgba(245, 54, 92, 0.18); color: #fb7185; }
 .status-inactive { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
 .status-blocked  { background: #e11d48; color: #fff; }
+.status-pending  { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
+.status-accepted { background: rgba(52, 211, 153, 0.18); color: #34d399; }
+.status-declined { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
 
 .row-action {
   display: inline-grid; place-items: center;

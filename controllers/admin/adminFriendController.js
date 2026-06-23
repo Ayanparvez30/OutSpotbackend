@@ -13,8 +13,8 @@ exports.listFriendships = async (req, res) => {
       prisma.friendship.findMany({
         where,
         include: {
-          requester: { select: { id: true, username: true } },
-          receiver: { select: { id: true, username: true } },
+          requester: { select: { id: true, username: true, firstName: true, lastName: true, minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 } } },
+          receiver: { select: { id: true, username: true, firstName: true, lastName: true, minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 } } },
         },
         orderBy: { requestedAt: 'desc' },
         skip: (page - 1) * pageSize,
