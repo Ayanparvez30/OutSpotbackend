@@ -66,15 +66,38 @@ body {
   flex-shrink: 0;
   background: #0c0c0f;
   border-right: 1px solid var(--os-border);
-  padding: 18px 14px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+/* The nav scrolls on its own → its scrollbar sits at the sidebar's right edge
+   (the "middle" of the layout), independent of the main content scrollbar. */
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 12px;
+}
+.sidebar-signout {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--os-border);
+  color: #c9c9d2;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.sidebar-signout i { font-size: 1.05rem; }
+.sidebar-signout:hover { color: #fff; background: rgba(255, 255, 255, 0.04); }
 
 .sidebar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 8px 18px;
+  padding: 18px 20px 14px;
+  flex-shrink: 0;
 }
 .sidebar-brand .brand-logo {
   width: 38px;

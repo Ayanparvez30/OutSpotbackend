@@ -9,39 +9,43 @@
     </div>
   </div>
 
-  <div class="sidebar-section">Overview</div>
-  <ul class="nav flex-column">
-    <li class="nav-item">
-      <a class="nav-link <%= isActive('/admin/dashboard') %>" href="/admin/dashboard"><i class="bi bi-grid-1x2-fill"></i>Dashboard</a>
-    </li>
-  </ul>
+  <div class="sidebar-scroll">
+    <div class="sidebar-section">Overview</div>
+    <ul class="nav flex-column">
+      <li class="nav-item">
+        <a class="nav-link <%= isActive('/admin/dashboard') %>" href="/admin/dashboard"><i class="bi bi-grid-1x2-fill"></i>Dashboard</a>
+      </li>
+    </ul>
 
-  <div class="sidebar-section">People</div>
-  <ul class="nav flex-column">
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/users') %>" href="/admin/users"><i class="bi bi-people"></i>Users</a></li>
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/communities') %>" href="/admin/communities"><i class="bi bi-building"></i>Communities</a></li>
-    <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/friends/blocks') === 0 ? '' : isActive('/admin/friends') %>" href="/admin/friends"><i class="bi bi-person-plus"></i>Friendships</a></li>
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/friends/blocks') %>" href="/admin/friends/blocks"><i class="bi bi-slash-circle"></i>Blocks</a></li>
-  </ul>
+    <div class="sidebar-section">People</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/users') %>" href="/admin/users"><i class="bi bi-people"></i>Users</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/communities') %>" href="/admin/communities"><i class="bi bi-building"></i>Communities</a></li>
+      <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/friends/blocks') === 0 ? '' : isActive('/admin/friends') %>" href="/admin/friends"><i class="bi bi-person-plus"></i>Friendships</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/friends/blocks') %>" href="/admin/friends/blocks"><i class="bi bi-slash-circle"></i>Blocks</a></li>
+    </ul>
 
-  <div class="sidebar-section">Gameplay</div>
-  <ul class="nav flex-column">
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/challenges') %>" href="/admin/challenges"><i class="bi bi-trophy"></i>Challenges</a></li>
-    <li class="nav-item"><a class="nav-link" href="/admin/challenges"><i class="bi bi-images"></i>Submissions</a></li>
-  </ul>
+    <div class="sidebar-section">Gameplay</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/challenges') %>" href="/admin/challenges"><i class="bi bi-trophy"></i>Challenges</a></li>
+      <li class="nav-item"><a class="nav-link" href="/admin/challenges"><i class="bi bi-images"></i>Submissions</a></li>
+    </ul>
 
-  <div class="sidebar-section">Economy</div>
-  <ul class="nav flex-column">
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/shop') %>" href="/admin/shop"><i class="bi bi-shop"></i>Shop Items</a></li>
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/points/multipliers') %>" href="/admin/points/multipliers"><i class="bi bi-lightning-charge-fill"></i>Multipliers</a></li>
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/points/ledger') %>" href="/admin/points/ledger"><i class="bi bi-card-list"></i>Points Ledger</a></li>
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/points/bundles') %>" href="/admin/points/bundles"><i class="bi bi-boxes"></i>Bundles &amp; Purchases</a></li>
-  </ul>
+    <div class="sidebar-section">Economy</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/shop') %>" href="/admin/shop"><i class="bi bi-shop"></i>Shop Items</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/points/multipliers') %>" href="/admin/points/multipliers"><i class="bi bi-lightning-charge-fill"></i>Multipliers</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/points/ledger') %>" href="/admin/points/ledger"><i class="bi bi-card-list"></i>Points Ledger</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/points/bundles') %>" href="/admin/points/bundles"><i class="bi bi-boxes"></i>Bundles &amp; Purchases</a></li>
+    </ul>
 
-  <div class="sidebar-section">Safety</div>
-  <ul class="nav flex-column">
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/reports') %>" href="/admin/reports"><i class="bi bi-flag"></i>Reports</a></li>
-    <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/locations/multipliers') === 0 ? '' : isActive('/admin/locations') %>" href="/admin/locations"><i class="bi bi-geo-alt"></i>Location Points</a></li>
-    <li class="nav-item"><a class="nav-link <%= isActive('/admin/locations/multipliers') %>" href="/admin/locations/multipliers"><i class="bi bi-lightning-charge"></i>Place Multipliers</a></li>
-  </ul>
+    <div class="sidebar-section">Safety</div>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/reports') %>" href="/admin/reports"><i class="bi bi-flag"></i>Reports</a></li>
+      <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/locations/multipliers') === 0 ? '' : isActive('/admin/locations') %>" href="/admin/locations"><i class="bi bi-geo-alt"></i>Location Points</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/locations/multipliers') %>" href="/admin/locations/multipliers"><i class="bi bi-lightning-charge"></i>Place Multipliers</a></li>
+    </ul>
+  </div>
+
+  <a href="/admin/logout" class="sidebar-signout"><i class="bi bi-box-arrow-right"></i>Sign out</a>
 </nav>
