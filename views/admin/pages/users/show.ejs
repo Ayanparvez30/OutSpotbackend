@@ -88,28 +88,68 @@
         <form method="POST" action="/admin/users/<%= user.id %>/grant-item" class="action-block">
           <div class="action-label mb-2"><i class="bi bi-bag-plus me-1"></i>Grant an item</div>
           <label class="form-label-sm">Pick an item to add to the user's inventory</label>
-          <div class="d-flex gap-2 align-items-center mb-2">
-            <img id="grantItemPreview" src="" alt="" class="grant-item-preview d-none">
-            <span id="grantItemPlaceholder" class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>
-            <select name="itemId" id="grantItemSelect" class="form-select form-select-sm" required>
-              <option value="">Choose item…</option>
-              <% shopItems.forEach(item => { %>
-                <option value="<%= item.id %>" data-img="<%= item.imageUrl || '' %>"><%= item.slot %> · <%= item.name %></option>
-              <% }) %>
-            </select>
+
+          <input type="hidden" name="itemId" id="grantItemId" required>
+          <div class="item-picker">
+            <button type="button" class="item-picker-toggle" id="grantItemToggle">
+              <span class="item-picker-selected" id="grantItemSelected">
+                <span class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>
+                <span class="text-secondary">Choose item…</span>
+              </span>
+              <i class="bi bi-chevron-down"></i>
+            </button>
+            <div class="item-picker-menu" id="grantItemMenu">
+              <input type="text" class="form-control form-control-sm item-picker-search" id="grantItemSearch" placeholder="Search items…" autocomplete="off">
+              <div class="item-picker-list">
+                <% shopItems.forEach(item => { %>
+                  <button type="button" class="item-picker-option" data-id="<%= item.id %>" data-img="<%= item.imageUrl || '' %>" data-name="<%= item.slot %> · <%= item.name %>">
+                    <% if (item.imageUrl) { %>
+                      <img src="<%= item.imageUrl %>" class="grant-item-preview" alt="">
+                    <% } else { %>
+                      <span class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>
+                    <% } %>
+                    <span class="item-picker-name"><strong><%= item.name %></strong><span class="text-secondary d-block"><%= item.slot %></span></span>
+                  </button>
+                <% }) %>
+              </div>
+            </div>
           </div>
-          <button class="btn btn-sm btn-gradient w-100">Grant Item</button>
+
+          <button class="btn btn-sm btn-gradient w-100 mt-2">Grant Item</button>
         </form>
         <script>
           (function () {
-            var sel = document.getElementById('grantItemSelect');
-            var prev = document.getElementById('grantItemPreview');
-            var ph = document.getElementById('grantItemPlaceholder');
-            if (!sel) return;
-            sel.addEventListener('change', function () {
-              var img = sel.options[sel.selectedIndex].getAttribute('data-img');
-              if (img) { prev.src = img; prev.classList.remove('d-none'); ph.classList.add('d-none'); }
-              else { prev.classList.add('d-none'); ph.classList.remove('d-none'); }
+            var picker = document.querySelector('.item-picker');
+            if (!picker) return;
+            var toggle = document.getElementById('grantItemToggle');
+            var menu = document.getElementById('grantItemMenu');
+            var idInput = document.getElementById('grantItemId');
+            var selected = document.getElementById('grantItemSelected');
+            var search = document.getElementById('grantItemSearch');
+
+            toggle.addEventListener('click', function () {
+              menu.classList.toggle('open');
+              if (menu.classList.contains('open')) search.focus();
+            });
+            document.addEventListener('click', function (e) {
+              if (!picker.contains(e.target)) menu.classList.remove('open');
+            });
+            search.addEventListener('input', function () {
+              var q = search.value.toLowerCase();
+              menu.querySelectorAll('.item-picker-option').forEach(function (opt) {
+                opt.style.display = opt.dataset.name.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+              });
+            });
+            menu.querySelectorAll('.item-picker-option').forEach(function (opt) {
+              opt.addEventListener('click', function () {
+                idInput.value = opt.dataset.id;
+                var img = opt.dataset.img;
+                var imgHtml = img
+                  ? '<img src="' + img + '" class="grant-item-preview" alt="">'
+                  : '<span class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>';
+                selected.innerHTML = imgHtml + '<span class="user-name">' + opt.dataset.name + '</span>';
+                menu.classList.remove('open');
+              });
             });
           })();
         </script>
