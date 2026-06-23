@@ -271,6 +271,46 @@ body {
 .metric-card .metric-value { font-size: 1.75rem; font-weight: 700; }
 .metric-card .metric-label { font-size: 0.8rem; text-transform: uppercase; color: var(--os-muted); letter-spacing: 0.5px; }
 
+/* Gradient pill button (e.g. Export CSV) */
+.btn-gradient {
+  background: var(--os-grad-active);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 9px 18px;
+  box-shadow: 0 6px 18px rgba(245, 54, 92, 0.30);
+}
+.btn-gradient:hover { color: #fff; filter: brightness(1.06); }
+
+/* Round avatar + name cell in tables */
+.user-cell { display: flex; align-items: center; gap: 12px; }
+.user-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  object-fit: cover; flex-shrink: 0;
+  background: var(--os-surface-2);
+}
+.user-avatar-fallback {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; flex-shrink: 0;
+  background: var(--os-grad); color: #fff; font-weight: 700; font-size: 0.85rem;
+}
+.user-name { font-weight: 600; color: #fff; line-height: 1.15; }
+.user-email { color: var(--os-muted); font-size: 0.8rem; }
+
+/* Status pills */
+.status-pill { font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+.status-active   { background: rgba(245, 54, 92, 0.18); color: #fb7185; }
+.status-inactive { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+.status-blocked  { background: #e11d48; color: #fff; }
+
+.row-action {
+  display: inline-grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  color: var(--os-muted); border: 1px solid var(--os-border);
+}
+.row-action:hover { color: #fff; border-color: var(--os-border-2); background: rgba(255,255,255,0.04); }
+
 /* Links read as white text by default; pink only on hover (brand accent).
    Keeps table usernames / list links clean instead of all-pink. */
 a { color: var(--os-text); text-decoration: none; }

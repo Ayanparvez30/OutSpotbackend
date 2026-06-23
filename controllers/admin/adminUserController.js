@@ -29,11 +29,29 @@ exports.listUsers = async (req, res) => {
         select: {
           id: true, username: true, email: true, phone: true,
           firstName: true, lastName: true, totalPoints: true,
+          referralCode: true,
           isActive: true, isBanned: true, createdAt: true,
+          // saved minime avatar (if any) for the list thumbnail
+          minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+          // only lat/lng exist in DB — no city name without reverse geocoding
+          Location: { select: { latitude: true, longitude: true } },
         },
       }),
       prisma.user.count({ where }),
     ]);
+
+    // Resolve city names from lat/lng (cached). Best-effort — any failure just
+    // leaves cityName undefined and the view falls back to coordinates.
+    try {
+      const { cityFromLatLng } = require('../../utils/reverseGeocode');
+      await Promise.all(users.map(async (u) => {
+        if (u.Location && u.Location.latitude != null) {
+          u.cityName = await cityFromLatLng(u.Location.latitude, u.Location.longitude);
+        }
+      }));
+    } catch (geoErr) {
+      console.error('city resolve error', geoErr.message);
+    }
 
     const totalPages = Math.ceil(total / pageSize);
     const baseUrl = `/admin/users${search ? `?q=${encodeURIComponent(search)}` : ''}`;
