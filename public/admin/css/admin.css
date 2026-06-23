@@ -271,15 +271,15 @@ body {
 .metric-card .metric-value { font-size: 1.75rem; font-weight: 700; }
 .metric-card .metric-label { font-size: 0.8rem; text-transform: uppercase; color: var(--os-muted); letter-spacing: 0.5px; }
 
-/* Gradient pill button (e.g. Export CSV) */
+/* Gradient pill button (Export CSV, Save, Apply) — pink → purple per design */
 .btn-gradient {
-  background: var(--os-grad-active);
+  background: linear-gradient(135deg, #ec4899, #a855f7);
   border: none;
   color: #fff;
   font-weight: 600;
   border-radius: 10px;
   padding: 9px 18px;
-  box-shadow: 0 6px 18px rgba(245, 54, 92, 0.30);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.32);
 }
 .btn-gradient:hover { color: #fff; filter: brightness(1.06); }
 

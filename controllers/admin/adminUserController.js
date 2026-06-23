@@ -28,7 +28,7 @@ exports.listUsers = async (req, res) => {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, username: true, email: true, phone: true,
-          firstName: true, lastName: true, totalPoints: true,
+          firstName: true, lastName: true, bio: true, totalPoints: true,
           referralCode: true,
           isActive: true, isBanned: true, createdAt: true,
           // who referred this user (set at signup when a referral code was used);
@@ -141,17 +141,42 @@ exports.editUserForm = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    const { firstName, lastName, bio } = req.body;
+    const { firstName, lastName, bio, name, avatarUrl } = req.body;
+
+    // The modal sends a single "Name"; the standalone edit page sends
+    // firstName/lastName. Support both — split a single name on the first space.
+    let fName = firstName;
+    let lName = lastName;
+    if (name !== undefined && firstName === undefined && lastName === undefined) {
+      const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+      fName = parts.shift() || null;
+      lName = parts.length ? parts.join(' ') : null;
+    }
+
     await prisma.user.update({
       where: { id: userId },
-      data: { firstName: firstName || null, lastName: lastName || null, bio: bio || null },
+      data: { firstName: fName || null, lastName: lName || null, bio: bio || null },
     });
+
+    // Optional Avatar URL — updates the user's saved minime thumbnail (the image
+    // shown in the list). No-op if the user has no saved minime yet.
+    if (avatarUrl !== undefined && String(avatarUrl).trim() !== '') {
+      const saved = await prisma.minime.findFirst({
+        where: { userId, isSaved: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+      if (saved) {
+        await prisma.minime.update({ where: { id: saved.id }, data: { avatarUrl: String(avatarUrl).trim() } });
+      }
+    }
+
     req.flash('success', 'User updated.');
-    res.redirect(`/admin/users/${userId}`);
+    res.redirect(req.get('Referer') || `/admin/users/${userId}`);
   } catch (error) {
     console.error('Update user error:', error);
     req.flash('error', 'Failed to update user.');
-    res.redirect(`/admin/users/${req.params.id}/edit`);
+    res.redirect(req.get('Referer') || `/admin/users/${req.params.id}/edit`);
   }
 };
 

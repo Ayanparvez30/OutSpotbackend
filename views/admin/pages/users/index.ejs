@@ -69,7 +69,13 @@
             </td>
             <td>
               <div class="d-flex justify-content-end gap-2">
-                <a href="/admin/users/<%= u.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
+                <button type="button" class="row-action js-edit-profile" title="Edit profile"
+                        data-user-id="<%= u.id %>"
+                        data-name="<%= [u.firstName, u.lastName].filter(Boolean).join(' ') %>"
+                        data-avatar="<%= avatar || '' %>"
+                        data-bio="<%= u.bio || '' %>">
+                  <i class="bi bi-pencil"></i>
+                </button>
                 <button type="button" class="row-action js-adjust-points" title="Adjust points"
                         data-user-id="<%= u.id %>" data-user-name="<%= [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username %>">
                   <i class="bi bi-coin"></i>
@@ -88,9 +94,40 @@
 
 <%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
 
+<!-- Edit profile modal (posts to the existing /edit route) -->
+<div class="modal fade" id="editProfileModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" id="editProfileForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" name="name" id="epName" class="form-control" placeholder="Full name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Avatar URL</label>
+            <input type="text" name="avatarUrl" id="epAvatar" class="form-control" placeholder="https://...">
+          </div>
+          <div class="mb-0">
+            <label class="form-label">Bio</label>
+            <textarea name="bio" id="epBio" class="form-control" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-gradient">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Adjust points modal (posts to the existing /adjust-points route) -->
 <div class="modal fade" id="adjustPointsModal" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <form method="POST" id="adjustPointsForm">
         <div class="modal-header">
@@ -112,6 +149,20 @@
 
 <script>
   (function () {
+    // Edit profile modal
+    var editEl = document.getElementById('editProfileModal');
+    var editForm = document.getElementById('editProfileForm');
+    document.querySelectorAll('.js-edit-profile').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        editForm.action = '/admin/users/' + btn.dataset.userId + '/edit';
+        document.getElementById('epName').value = btn.dataset.name || '';
+        document.getElementById('epAvatar').value = btn.dataset.avatar || '';
+        document.getElementById('epBio').value = btn.dataset.bio || '';
+        bootstrap.Modal.getOrCreateInstance(editEl).show();
+      });
+    });
+
+    // Adjust points modal
     var modalEl = document.getElementById('adjustPointsModal');
     var form = document.getElementById('adjustPointsForm');
     var nameEl = document.getElementById('apUserName');
