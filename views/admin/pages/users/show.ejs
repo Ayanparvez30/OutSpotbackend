@@ -73,26 +73,44 @@
         <% } %>
 
         <hr>
+        <div class="action-label">Adjust points</div>
         <form method="POST" action="/admin/users/<%= user.id %>/adjust-points" class="mb-2">
           <div class="input-group input-group-sm mb-1">
-            <input type="number" name="points" class="form-control" placeholder="Points (+/-)" required>
+            <input type="number" name="points" class="form-control" placeholder="+ add / − deduct" required>
             <input type="text" name="reason" class="form-control" placeholder="Reason" value="ADMIN_ADJUSTMENT">
           </div>
+          <small class="text-secondary d-block mb-1">Positive number adds points, negative deducts.</small>
           <button class="btn btn-sm btn-outline-primary w-100">Adjust Points</button>
         </form>
 
         <hr>
+        <div class="action-label">Grant an item</div>
         <form method="POST" action="/admin/users/<%= user.id %>/grant-item">
-          <div class="input-group input-group-sm mb-1">
-            <select name="itemId" class="form-select" required>
-              <option value="">Grant item...</option>
+          <div class="d-flex gap-2 align-items-center mb-2">
+            <img id="grantItemPreview" src="" alt="" class="grant-item-preview d-none">
+            <span id="grantItemPlaceholder" class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>
+            <select name="itemId" id="grantItemSelect" class="form-select form-select-sm" required>
+              <option value="">Choose item…</option>
               <% shopItems.forEach(item => { %>
-                <option value="<%= item.id %>"><%= item.slot %> - <%= item.name %></option>
+                <option value="<%= item.id %>" data-img="<%= item.imageUrl || '' %>"><%= item.slot %> · <%= item.name %></option>
               <% }) %>
             </select>
           </div>
           <button class="btn btn-sm btn-outline-secondary w-100">Grant Item</button>
         </form>
+        <script>
+          (function () {
+            var sel = document.getElementById('grantItemSelect');
+            var prev = document.getElementById('grantItemPreview');
+            var ph = document.getElementById('grantItemPlaceholder');
+            if (!sel) return;
+            sel.addEventListener('change', function () {
+              var img = sel.options[sel.selectedIndex].getAttribute('data-img');
+              if (img) { prev.src = img; prev.classList.remove('d-none'); ph.classList.add('d-none'); }
+              else { prev.classList.add('d-none'); ph.classList.remove('d-none'); }
+            });
+          })();
+        </script>
       </div>
     </div>
   </div>
@@ -107,9 +125,8 @@
         <% } else { %>
           <div class="minime-grid">
             <% user.minime.forEach(m => { %>
-              <a href="<%= m.avatarUrl %>" target="_blank" class="minime-thumb<%= m.isSaved ? ' is-current' : '' %>">
+              <a href="<%= m.avatarUrl %>" target="_blank" class="minime-thumb">
                 <img src="<%= m.avatarUrl %>" alt="">
-                <% if (m.isSaved) { %><span class="minime-badge">Current</span><% } %>
               </a>
             <% }) %>
           </div>
@@ -178,11 +195,18 @@
         <% if (user.inventory.length === 0) { %>
           <p class="text-muted p-3 mb-0">No items.</p>
         <% } else { %>
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Item</th><th>Slot</th><th>Equipped</th><th>Action</th></tr></thead>
+          <table class="table table-sm mb-0 align-middle">
+            <thead><tr><th></th><th>Item</th><th>Slot</th><th>Equipped</th><th>Action</th></tr></thead>
             <tbody>
               <% user.inventory.forEach(inv => { %>
                 <tr>
+                  <td>
+                    <% if (inv.item.imageUrl) { %>
+                      <img src="<%= inv.item.imageUrl %>" class="shop-img-sm" alt="">
+                    <% } else { %>
+                      <span class="shop-img-sm grant-item-preview-empty"><i class="bi bi-image"></i></span>
+                    <% } %>
+                  </td>
                   <td><%= inv.item.name %></td>
                   <td><%= inv.item.slot %></td>
                   <td><%= inv.equipped ? 'Yes' : 'No' %></td>

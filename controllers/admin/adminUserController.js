@@ -110,7 +110,7 @@ exports.showUser = async (req, res) => {
     // Get all shop items for the grant-item dropdown
     const shopItems = await prisma.shopItem.findMany({
       orderBy: [{ slot: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, slot: true },
+      select: { id: true, name: true, slot: true, imageUrl: true },
     });
 
     res.render('admin/pages/users/show', {
