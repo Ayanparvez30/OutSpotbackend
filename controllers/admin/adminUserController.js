@@ -81,6 +81,12 @@ exports.showUser = async (req, res) => {
         inventory: { include: { item: true }, take: 20 },
         pointsLedger: { orderBy: { createdAt: 'desc' }, take: 10 },
         multipliers: { orderBy: { endsAt: 'desc' }, take: 5 },
+        // all generated avatars (saved one first); used for the profile photo + gallery
+        minime: {
+          where: { avatarUrl: { not: null } },
+          orderBy: [{ isSaved: 'desc' }, { updatedAt: 'desc' }],
+          select: { id: true, avatarUrl: true, isSaved: true, createdAt: true },
+        },
         submissions: { orderBy: { createdAt: 'desc' }, take: 10, include: { challenge: true } },
         reportsSent: { take: 5, include: { reported: { select: { username: true } } } },
         reportsReceived: { take: 5, include: { reporter: { select: { username: true } } } },

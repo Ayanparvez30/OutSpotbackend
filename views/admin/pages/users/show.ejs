@@ -1,7 +1,13 @@
 <div class="row">
   <div class="col-md-4">
+    <% const currentAvatar = (user.minime && (user.minime.find(m => m.isSaved) || user.minime[0])) || null; %>
     <div class="card mb-3">
       <div class="card-body text-center">
+        <% if (currentAvatar && currentAvatar.avatarUrl) { %>
+          <img src="<%= currentAvatar.avatarUrl %>" class="profile-avatar mb-3" alt="">
+        <% } else { %>
+          <span class="profile-avatar-fallback mb-3"><%= (user.username || '?').slice(0, 2).toUpperCase() %></span>
+        <% } %>
         <h5><%= user.username %></h5>
         <p class="text-muted mb-1"><%= user.email || 'No email' %></p>
         <p class="text-muted mb-1"><%= user.phone || 'No phone' %></p>
@@ -92,6 +98,25 @@
   </div>
 
   <div class="col-md-8">
+    <!-- Generated Avatars -->
+    <div class="card mb-3">
+      <div class="card-header"><strong>Avatars (<%= user.minime ? user.minime.length : 0 %>)</strong></div>
+      <div class="card-body">
+        <% if (!user.minime || user.minime.length === 0) { %>
+          <p class="text-secondary mb-0">No avatars generated yet.</p>
+        <% } else { %>
+          <div class="minime-grid">
+            <% user.minime.forEach(m => { %>
+              <a href="<%= m.avatarUrl %>" target="_blank" class="minime-thumb<%= m.isSaved ? ' is-current' : '' %>">
+                <img src="<%= m.avatarUrl %>" alt="">
+                <% if (m.isSaved) { %><span class="minime-badge">Current</span><% } %>
+              </a>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
     <!-- Recent Submissions -->
     <div class="card mb-3">
       <div class="card-header"><strong>Recent Submissions</strong></div>
