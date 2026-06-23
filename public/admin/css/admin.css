@@ -396,8 +396,19 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 
 /* Action section sub-labels (user detail) */
 .action-label {
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--os-muted); font-weight: 600; margin-bottom: 6px;
+  font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #fff; font-weight: 700;
+}
+/* Each admin action grouped in its own subtle box for clarity */
+.action-block {
+  background: var(--os-surface-2);
+  border: 1px solid var(--os-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.form-label-sm {
+  font-size: 0.72rem; color: var(--os-muted);
+  margin-bottom: 3px; display: block;
 }
 /* Grant-item image preview + small inventory thumbnails */
 .grant-item-preview {
