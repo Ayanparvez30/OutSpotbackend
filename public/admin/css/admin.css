@@ -26,12 +26,19 @@
   --bs-emphasis-color: #fff;
 }
 
+html, body { height: 100%; }
 body {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: var(--os-bg);
   color: var(--os-text);
   letter-spacing: -0.01em;
 }
+
+/* Independent-scroll shell: the page itself never scrolls; the sidebar and the
+   main content each scroll on their own inside a fixed 100vh frame. */
+.admin-shell { height: 100vh; overflow: hidden; }
+.admin-main-col { height: 100vh; overflow: hidden; }
+.admin-main { overflow-y: auto; }
 
 /* ---------------- Cards ---------------- */
 .card {
@@ -48,9 +55,7 @@ body {
 /* ---------------- Sidebar ---------------- */
 .admin-sidebar {
   width: 256px;
-  min-height: 100vh;
-  position: sticky;
-  top: 0;
+  height: 100vh;
   flex-shrink: 0;
   background: #0c0c0f;
   border-right: 1px solid var(--os-border);
