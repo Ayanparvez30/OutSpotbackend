@@ -31,6 +31,9 @@ exports.listUsers = async (req, res) => {
           firstName: true, lastName: true, totalPoints: true,
           referralCode: true,
           isActive: true, isBanned: true, createdAt: true,
+          // who referred this user (set at signup when a referral code was used);
+          // null for users who joined without one
+          referredBy: { select: { username: true } },
           // saved minime avatar (if any) for the list thumbnail
           minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
           // only lat/lng exist in DB — no city name without reverse geocoding

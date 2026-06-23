@@ -283,18 +283,21 @@ body {
 }
 .btn-gradient:hover { color: #fff; filter: brightness(1.06); }
 
-/* Round avatar + name cell in tables */
+/* Avatar + name cell in tables. Full-body minimes show whole figure:
+   rounded square + object-fit:contain (no cropping). */
 .user-cell { display: flex; align-items: center; gap: 12px; }
 .user-avatar {
-  width: 40px; height: 40px; border-radius: 50%;
-  object-fit: cover; flex-shrink: 0;
+  width: 48px; height: 56px; border-radius: 12px;
+  object-fit: contain; object-position: center bottom; flex-shrink: 0;
   background: var(--os-surface-2);
 }
 .user-avatar-fallback {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 48px; height: 56px; border-radius: 12px;
   display: grid; place-items: center; flex-shrink: 0;
-  background: var(--os-grad); color: #fff; font-weight: 700; font-size: 0.85rem;
+  background: var(--os-grad); color: #fff; font-weight: 700; font-size: 0.95rem;
 }
+/* Taller rows so the full avatar has room to breathe */
+.table td { padding-top: 0.7rem; padding-bottom: 0.7rem; }
 .user-name { font-weight: 600; color: #fff; line-height: 1.15; }
 .user-email { color: var(--os-muted); font-size: 0.8rem; }
 

@@ -44,7 +44,11 @@
                 </span>
               </a>
             </td>
-            <td><%= u.referralCode || '-' %></td>
+            <td>
+              <% if (u.referredBy && u.referredBy.username) { %>
+                <a href="/admin/users?q=<%= encodeURIComponent(u.referredBy.username) %>">@<%= u.referredBy.username %></a>
+              <% } else { %>-<% } %>
+            </td>
             <td class="fw-semibold"><%= (u.totalPoints || 0).toLocaleString() %></td>
             <td>
               <% if (u.cityName) { %>
