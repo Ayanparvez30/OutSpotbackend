@@ -3,8 +3,8 @@
   function userCellHtml(u){
     if (!u) return '-';
     const av = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
-    const nm = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
-    const initials = (nm || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+    const nm = u.username;
+    const initials = (nm || '?').trim().slice(0, 2).toUpperCase();
     const img = av
       ? `<img src="${esc(av)}" class="user-avatar" alt="">`
       : `<span class="user-avatar-fallback">${esc(initials)}</span>`;
