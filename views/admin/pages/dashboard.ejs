@@ -84,12 +84,23 @@
         <% if (!recentUsers || recentUsers.length === 0) { %>
           <p class="text-secondary p-3 mb-0">No recent users.</p>
         <% } else { %>
-          <% recentUsers.forEach(u => { %>
+          <% recentUsers.forEach(u => {
+               const avatar = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+               const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+               const initials = (fullName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+          %>
             <div class="activity-row d-flex justify-content-between align-items-center">
-              <div>
-                <a href="/admin/users/<%= u.id %>" class="fw-semibold">@<%= u.username %></a>
-                <div class="meta"><%= u.email || 'no email' %></div>
-              </div>
+              <a href="/admin/users/<%= u.id %>" class="user-cell">
+                <% if (avatar) { %>
+                  <img src="<%= avatar %>" class="user-avatar" alt="">
+                <% } else { %>
+                  <span class="user-avatar-fallback"><%= initials %></span>
+                <% } %>
+                <span>
+                  <span class="user-name d-block"><%= fullName %></span>
+                  <span class="user-email"><%= u.email || u.phone || 'no email' %></span>
+                </span>
+              </a>
               <div class="text-end">
                 <div class="fw-semibold"><%= u.totalPoints %> pts</div>
                 <div class="meta"><%= u.createdAt.toLocaleDateString() %></div>

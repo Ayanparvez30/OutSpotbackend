@@ -38,7 +38,11 @@ exports.renderDashboard = async (req, res) => {
       prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
         take: 10,
-        select: { id: true, username: true, email: true, createdAt: true, totalPoints: true },
+        select: {
+          id: true, username: true, email: true, phone: true,
+          firstName: true, lastName: true, createdAt: true, totalPoints: true,
+          minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+        },
       }),
     ]);
 
