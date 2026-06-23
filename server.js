@@ -36,7 +36,12 @@ app.use('/admin', session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    // Only mark the cookie Secure when HTTPS is actually in front. Tying this to
+    // NODE_ENV broke login over plain HTTP (prod server on an IP / local run with
+    // a prod .env): browsers silently DROP a Secure cookie on http:// → no
+    // session → logged out on every reload. Default false; set
+    // ADMIN_COOKIE_SECURE=true once the panel is served over HTTPS.
+    secure: process.env.ADMIN_COOKIE_SECURE === 'true',
     maxAge: 8 * 60 * 60 * 1000,
     sameSite: 'lax',
   },
