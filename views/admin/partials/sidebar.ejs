@@ -27,7 +27,7 @@
 
     <div class="sidebar-section">Gameplay</div>
     <ul class="nav flex-column">
-      <li class="nav-item"><a class="nav-link <%= isActive('/admin/challenges') %>" href="/admin/challenges"><i class="bi bi-trophy"></i>Challenges</a></li>
+      <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/challenges/submissions') === 0 ? '' : isActive('/admin/challenges') %>" href="/admin/challenges"><i class="bi bi-trophy"></i>Challenges</a></li>
       <li class="nav-item"><a class="nav-link <%= isActive('/admin/challenges/submissions') %>" href="/admin/challenges/submissions"><i class="bi bi-images"></i>Submissions</a></li>
     </ul>
 
