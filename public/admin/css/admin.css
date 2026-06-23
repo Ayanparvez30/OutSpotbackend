@@ -40,6 +40,13 @@ body {
 .admin-main-col { height: 100vh; overflow: hidden; }
 .admin-main { overflow-y: auto; }
 
+/* Slim, subtle custom scrollbars (everywhere) to match the design */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.28); }
+
 /* ---------------- Cards ---------------- */
 .card {
   background: var(--os-surface);
