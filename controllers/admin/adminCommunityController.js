@@ -38,6 +38,45 @@ exports.listCommunities = async (req, res) => {
   }
 };
 
+exports.showCommunity = async (req, res) => {
+  try {
+    const community = await prisma.community.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: {
+        creator: { select: { id: true, username: true, firstName: true, lastName: true } },
+        _count: { select: { members: true } },
+        members: {
+          orderBy: { joinedAt: 'asc' },
+          include: {
+            user: {
+              select: {
+                id: true, username: true, email: true, phone: true,
+                firstName: true, lastName: true, totalPoints: true,
+                minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!community) {
+      req.flash('error', 'Community not found.');
+      return res.redirect('/admin/communities');
+    }
+
+    res.render('admin/pages/communities/show', {
+      layout: 'admin/layouts/main',
+      title: community.name,
+      community,
+    });
+  } catch (error) {
+    console.error('Show community error:', error);
+    req.flash('error', 'Failed to load community.');
+    res.redirect('/admin/communities');
+  }
+};
+
 exports.editForm = async (req, res) => {
   try {
     const community = await prisma.community.findUnique({

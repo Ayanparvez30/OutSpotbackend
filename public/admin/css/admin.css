@@ -357,6 +357,14 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 .user-name { font-weight: 600; color: #fff; line-height: 1.15; }
 .user-email { color: var(--os-muted); font-size: 0.8rem; }
 
+/* Community thumbnails */
+.community-thumb { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.community-thumb-fallback {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--os-grad); color: #fff;
+}
+.community-hero { width: 72px; height: 72px; border-radius: 14px; object-fit: cover; font-size: 1.5rem; }
+
 /* Status pills */
 .status-pill { font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
 .status-active   { background: rgba(245, 54, 92, 0.18); color: #fb7185; }
