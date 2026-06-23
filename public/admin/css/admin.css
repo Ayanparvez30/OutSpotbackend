@@ -382,6 +382,17 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 }
 .row-action:hover { color: #fff; border-color: var(--os-border-2); background: rgba(255,255,255,0.04); }
 
+/* Plain white text button that turns amber on hover/click (e.g. Unblock) */
+.btn-unblock {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.btn-unblock:hover, .btn-unblock:active, .btn-unblock:focus { color: #fbbf24; }
+
 /* A touch more breathing room on the sides so wide tables don't hug the edge */
 main.p-4 { padding-left: 2rem; padding-right: 2.25rem; }
 

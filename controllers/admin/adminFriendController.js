@@ -89,8 +89,8 @@ exports.listBlocks = async (req, res) => {
     const [blocks, total] = await Promise.all([
       prisma.block.findMany({
         include: {
-          blocker: { select: { id: true, username: true } },
-          blocked: { select: { id: true, username: true } },
+          blocker: { select: { id: true, username: true, minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 } } },
+          blocked: { select: { id: true, username: true, minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 } } },
         },
         orderBy: { blockedAt: 'desc' },
         skip: (page - 1) * pageSize,
