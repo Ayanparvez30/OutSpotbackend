@@ -311,8 +311,12 @@ body {
   display: inline-grid; place-items: center;
   width: 32px; height: 32px; border-radius: 8px;
   color: var(--os-muted); border: 1px solid var(--os-border);
+  background: transparent; cursor: pointer; padding: 0;
 }
 .row-action:hover { color: #fff; border-color: var(--os-border-2); background: rgba(255,255,255,0.04); }
+
+/* A touch more breathing room on the sides so wide tables don't hug the edge */
+main.p-4 { padding-left: 2rem; padding-right: 2.25rem; }
 
 /* Links read as white text by default; pink only on hover (brand accent).
    Keeps table usernames / list links clean instead of all-pink. */

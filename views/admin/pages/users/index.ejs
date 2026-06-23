@@ -67,8 +67,14 @@
                 <span class="status-pill status-active">Active</span>
               <% } %>
             </td>
-            <td class="text-end">
-              <a href="/admin/users/<%= u.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
+            <td>
+              <div class="d-flex justify-content-end gap-2">
+                <a href="/admin/users/<%= u.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
+                <button type="button" class="row-action js-adjust-points" title="Adjust points"
+                        data-user-id="<%= u.id %>" data-user-name="<%= [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username %>">
+                  <i class="bi bi-coin"></i>
+                </button>
+              </div>
             </td>
           </tr>
         <% }) %>
@@ -81,3 +87,41 @@
 </div>
 
 <%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<!-- Adjust points modal (posts to the existing /adjust-points route) -->
+<div class="modal fade" id="adjustPointsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" id="adjustPointsForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Adjust points for <span id="apUserName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Delta (use negative to debit)</label>
+          <input type="number" name="points" class="form-control" placeholder="e.g. 500 or -200" required autofocus>
+          <input type="hidden" name="reason" value="ADMIN_ADJUSTMENT">
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-gradient">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modalEl = document.getElementById('adjustPointsModal');
+    var form = document.getElementById('adjustPointsForm');
+    var nameEl = document.getElementById('apUserName');
+    document.querySelectorAll('.js-adjust-points').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        form.action = '/admin/users/' + btn.dataset.userId + '/adjust-points';
+        nameEl.textContent = btn.dataset.userName;
+        form.querySelector('input[name="points"]').value = '';
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    });
+  })();
+</script>
