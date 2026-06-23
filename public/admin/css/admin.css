@@ -23,8 +23,6 @@
   --bs-border-color:   var(--os-border);
   --bs-secondary-color: var(--os-muted);
   --bs-emphasis-color: #fff;
-  --bs-link-color-rgb: 236, 72, 153;
-  --bs-link-hover-color-rgb: 244, 114, 182;
 }
 
 body {
@@ -273,5 +271,8 @@ body {
 .metric-card .metric-value { font-size: 1.75rem; font-weight: 700; }
 .metric-card .metric-label { font-size: 0.8rem; text-transform: uppercase; color: var(--os-muted); letter-spacing: 0.5px; }
 
-a { text-decoration: none; }
+/* Links read as white text by default; pink only on hover (brand accent).
+   Keeps table usernames / list links clean instead of all-pink. */
+a { color: var(--os-text); text-decoration: none; }
+a:hover { color: var(--os-pink); }
 code { color: #f0abfc; }
