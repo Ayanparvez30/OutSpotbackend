@@ -26,6 +26,9 @@
   --bs-emphasis-color: #fff;
 }
 
+/* Tell the browser this is a dark UI → native scrollbars (and form controls)
+   render dark instead of showing a WHITE track behind the thumb. */
+html { color-scheme: dark; }
 html, body { height: 100%; }
 body {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
