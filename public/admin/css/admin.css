@@ -455,6 +455,11 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 .status-pending  { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
 .status-accepted { background: rgba(52, 211, 153, 0.18); color: #34d399; }
 .status-declined { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+.status-featured { background: rgba(168, 85, 247, 0.18); color: #c084fc; }
+
+/* Icon action states (e.g. challenge feature star / power toggle) */
+.row-action.star-on  { color: #fbbf24; border-color: rgba(251, 191, 36, 0.40); }
+.row-action.power-on { color: #34d399; border-color: rgba(52, 211, 153, 0.40); }
 
 .row-action {
   display: inline-grid; place-items: center;

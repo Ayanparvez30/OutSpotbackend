@@ -1,63 +1,67 @@
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Challenges</h1>
+    <p class="page-subtitle">Create, feature, activate</p>
+  </div>
+  <a href="/admin/challenges/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-2"></i>New challenge</a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div class="d-flex gap-2 align-items-center">
-    <span class="text-muted"><%= total %> challenges</span>
+    <span class="text-muted me-1"><%= total %> challenges</span>
     <a href="/admin/challenges" class="btn btn-sm <%= !frequency ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
     <a href="/admin/challenges?frequency=DAILY" class="btn btn-sm <%= frequency === 'DAILY' ? 'btn-primary' : 'btn-outline-secondary' %>">Daily</a>
     <a href="/admin/challenges?frequency=WEEKLY" class="btn btn-sm <%= frequency === 'WEEKLY' ? 'btn-primary' : 'btn-outline-secondary' %>">Weekly</a>
   </div>
-  <div class="d-flex gap-2">
-    <form method="GET" action="/admin/challenges" class="d-flex gap-2">
-      <input type="text" name="q" class="form-control form-control-sm" placeholder="Search..." value="<%= search %>" style="width:180px">
-      <button class="btn btn-sm btn-primary">Search</button>
-    </form>
-    <a href="/admin/challenges/create" class="btn btn-sm btn-success"><i class="bi bi-plus me-1"></i>Create</a>
-  </div>
+  <form method="GET" action="/admin/challenges" class="d-flex gap-2">
+    <input type="text" name="q" class="form-control form-control-sm" placeholder="Search..." value="<%= search %>" style="width:200px">
+    <button class="btn btn-sm btn-primary">Search</button>
+  </form>
 </div>
 
 <div class="card">
   <div class="card-body p-0">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 align-middle">
       <thead>
-        <tr><th>ID</th><th>Title</th><th>Frequency</th><th>Points</th><th>Tier</th><th>Active</th><th>Featured</th><th>Submissions</th><th>Actions</th></tr>
+        <tr><th>Title</th><th>Type</th><th>Frequency</th><th>Points</th><th>Status</th><th class="text-end">Actions</th></tr>
       </thead>
       <tbody>
         <% challenges.forEach(c => { %>
           <tr>
-            <td><%= c.id %></td>
-            <td><%= c.title %></td>
-            <td><span class="badge bg-<%= c.frequency === 'DAILY' ? 'primary' : 'info' %>"><%= c.frequency %></span></td>
-            <td><%= c.points %></td>
-            <td><span class="badge bg-<%= c.tier === 'GOLD' ? 'warning' : 'secondary' %>"><%= c.tier %></span></td>
+            <td>
+              <div class="fw-semibold"><%= c.title %></div>
+              <% if (c.description) { %><div class="text-secondary small"><%= c.description %></div><% } %>
+            </td>
+            <td><%= c.type || '-' %></td>
+            <td><%= c.frequency.charAt(0) + c.frequency.slice(1).toLowerCase() %></td>
+            <td class="fw-semibold"><%= c.points %></td>
             <td>
               <% if (c.isActive) { %>
-                <span class="badge bg-success">Active</span>
+                <span class="status-pill status-active">Active</span>
               <% } else { %>
-                <span class="badge bg-secondary">Inactive</span>
+                <span class="status-pill status-inactive">Inactive</span>
               <% } %>
+              <% if (c.isFeatured) { %> <span class="status-pill status-featured">Featured</span><% } %>
             </td>
-            <td><%= c.isFeatured ? 'Yes' : '-' %></td>
-            <td><a href="/admin/challenges/<%= c.id %>/submissions"><%= c._count.submissions %></a></td>
-            <td>
-              <div class="d-flex gap-1">
-                <a href="/admin/challenges/<%= c.id %>/edit" class="btn btn-sm btn-outline-primary">Edit</a>
-                <% if (c.isActive) { %>
-                  <form method="POST" action="/admin/challenges/<%= c.id %>/deactivate" style="display:inline">
-                    <button class="btn btn-sm btn-outline-warning">Deactivate</button>
-                  </form>
-                <% } else { %>
-                  <form method="POST" action="/admin/challenges/<%= c.id %>/activate" style="display:inline">
-                    <button class="btn btn-sm btn-outline-success">Activate</button>
-                  </form>
-                <% } %>
+            <td class="text-end">
+              <div class="d-flex gap-2 justify-content-end">
+                <a href="/admin/challenges/<%= c.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form method="POST" action="/admin/challenges/<%= c.id %>/feature" style="display:inline">
-                  <button class="btn btn-sm btn-outline-info"><%= c.isFeatured ? 'Unfeature' : 'Feature' %></button>
+                  <button class="row-action<%= c.isFeatured ? ' star-on' : '' %>" title="<%= c.isFeatured ? 'Unfeature' : 'Feature' %>">
+                    <i class="bi <%= c.isFeatured ? 'bi-star-fill' : 'bi-star' %>"></i>
+                  </button>
+                </form>
+                <form method="POST" action="/admin/challenges/<%= c.id %>/<%= c.isActive ? 'deactivate' : 'activate' %>" style="display:inline">
+                  <button class="row-action<%= c.isActive ? ' power-on' : '' %>" title="<%= c.isActive ? 'Deactivate' : 'Activate' %>">
+                    <i class="bi bi-power"></i>
+                  </button>
                 </form>
               </div>
             </td>
           </tr>
         <% }) %>
         <% if (challenges.length === 0) { %>
-          <tr><td colspan="9" class="text-center text-muted py-3">No challenges found.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-3">No challenges found.</td></tr>
         <% } %>
       </tbody>
     </table>
