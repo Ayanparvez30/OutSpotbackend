@@ -179,6 +179,45 @@ exports.deleteChallenge = async (req, res) => {
   }
 };
 
+// All submissions across every challenge (sidebar → Submissions).
+exports.listAllSubmissions = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = 30;
+    const status = req.query.status;
+    const where = status ? { verificationStatus: status } : {};
+
+    const [submissions, total] = await Promise.all([
+      prisma.submission.findMany({
+        where,
+        include: {
+          user: { select: { id: true, username: true, minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 } } },
+          challenge: { select: { id: true, title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.submission.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize);
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    const baseUrl = `/admin/challenges/submissions${params.toString() ? `?${params}` : ''}`;
+
+    res.render('admin/pages/challenges/all-submissions', {
+      layout: 'admin/layouts/main',
+      title: 'Submissions',
+      submissions, total, page, totalPages, baseUrl, statusFilter: status || '',
+    });
+  } catch (error) {
+    console.error('List all submissions error:', error);
+    req.flash('error', 'Failed to load submissions.');
+    res.redirect('/admin/dashboard');
+  }
+};
+
 exports.viewSubmissions = async (req, res) => {
   try {
     const challengeId = parseInt(req.params.id);

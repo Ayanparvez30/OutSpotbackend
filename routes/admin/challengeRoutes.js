@@ -3,6 +3,7 @@ const router = express.Router();
 const ctrl = require('../../controllers/admin/adminChallengeController');
 
 router.get('/', ctrl.listChallenges);
+router.get('/submissions', ctrl.listAllSubmissions);
 router.get('/create', ctrl.createForm);
 router.post('/create', ctrl.createChallenge);
 router.get('/:id/edit', ctrl.editForm);
