@@ -15,6 +15,7 @@
   --os-grad:        linear-gradient(135deg, #a855f7, #ec4899);
   --os-grad-active: linear-gradient(135deg, #f5365c, #fb6f47);
   --os-pink:        #ec4899;
+  --os-purple:      #a855f7;
 }
 
 [data-bs-theme="dark"] {
@@ -232,8 +233,8 @@ body {
 }
 .form-control:focus, .form-select:focus {
   background: var(--os-surface-2);
-  border-color: var(--os-pink);
-  box-shadow: 0 0 0 0.2rem rgba(236, 72, 153, 0.18);
+  border-color: var(--os-purple);
+  box-shadow: 0 0 0 0.2rem rgba(168, 85, 247, 0.22);
   color: var(--os-text);
 }
 
