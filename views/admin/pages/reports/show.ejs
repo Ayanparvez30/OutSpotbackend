@@ -14,11 +14,11 @@
         <li class="list-group-item d-flex justify-content-between">
           <span>Status</span>
           <% if (report.status === 'PENDING') { %>
-            <span class="badge bg-warning text-dark">Pending</span>
+            <span class="badge badge-pending">Pending</span>
           <% } else if (report.status === 'Reviewed') { %>
-            <span class="badge bg-info text-dark">Reviewed</span>
+            <span class="badge badge-reviewed">Reviewed</span>
           <% } else { %>
-            <span class="badge bg-success">Resolved</span>
+            <span class="badge badge-resolved">Resolved</span>
           <% } %>
         </li>
         <li class="list-group-item d-flex justify-content-between">

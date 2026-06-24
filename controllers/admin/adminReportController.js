@@ -20,8 +20,8 @@ exports.listReports = async (req, res) => {
       prisma.report.findMany({
         where,
         include: {
-          reporter: { select: { id: true, username: true } },
-          reported: { select: { id: true, username: true } },
+          reporter: { select: { id: true, username: true, firstName: true, lastName: true, minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } } } },
+          reported: { select: { id: true, username: true, firstName: true, lastName: true, minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } } } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
