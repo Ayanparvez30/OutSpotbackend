@@ -610,7 +610,9 @@ exports.purchasePointBundle = async (req, res) => {
           userId,
           productId: bundle.productId,
           points: bundle.points,
-          priceUsd: bundle.priceUsd,
+          // Purchase column is required (non-null); product priceUsd is now optional
+          // (real price comes from the store), so fall back to 0 when unset.
+          priceUsd: bundle.priceUsd ?? 0,
           receiptTxId: receiptTxId || null
         }
       });
