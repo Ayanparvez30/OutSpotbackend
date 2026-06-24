@@ -1,0 +1,56 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Leaderboard</h1>
+    <p class="page-subtitle">Users ranked by all-time points · weekly window <%= weekLabel %></p>
+  </div>
+  <span class="text-muted align-self-center"><%= total.toLocaleString() %> users</span>
+</div>
+
+<ul class="nav nav-pills mb-3">
+  <li class="nav-item"><a class="nav-link" href="/admin/leaderboard">Communities</a></li>
+  <li class="nav-item"><a class="nav-link active" href="/admin/leaderboard/users">Users</a></li>
+</ul>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th style="width:60px">#</th>
+          <th>User</th>
+          <th class="text-end">Weekly pts</th>
+          <th class="text-end">All-time pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% users.forEach(u => {
+             const initials = (u.fullName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        %>
+          <tr>
+            <td class="fw-bold text-muted"><%= u.rank %></td>
+            <td>
+              <a href="/admin/users/<%= u.id %>" class="user-cell">
+                <% if (u.avatarUrl) { %>
+                  <img src="<%= u.avatarUrl %>" class="user-avatar" alt="">
+                <% } else { %>
+                  <span class="user-avatar-fallback"><%= initials %></span>
+                <% } %>
+                <span>
+                  <span class="user-name d-block"><%= u.fullName %></span>
+                  <span class="user-email"><%= u.contact || 'no email' %></span>
+                </span>
+              </a>
+            </td>
+            <td class="text-end"><%= u.weeklyPoints.toLocaleString() %></td>
+            <td class="text-end fw-semibold"><%= u.allTimePoints.toLocaleString() %></td>
+          </tr>
+        <% }) %>
+        <% if (users.length === 0) { %>
+          <tr><td colspan="4" class="text-center text-muted py-3">No users found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

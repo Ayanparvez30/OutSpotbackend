@@ -112,6 +112,67 @@ exports.listCommunityLeaderboard = async (req, res) => {
   }
 };
 
+/* ------------------------ global user leaderboard ------------------------ */
+// All users ranked by all-time total points, with weekly points + avatar.
+// Ranked + paginated at the DB level (orderBy totalPoints); weekly is computed
+// only for the users on the current page.
+exports.listUserLeaderboard = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = 20;
+    const weekStart = getStartOfWeek();
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        select: {
+          id: true, username: true, firstName: true, lastName: true,
+          email: true, phone: true, totalPoints: true,
+          minime: {
+            where: { isSaved: true },
+            orderBy: { updatedAt: 'desc' },
+            take: 1,
+            select: { avatarUrl: true },
+          },
+        },
+        orderBy: [{ totalPoints: 'desc' }, { id: 'asc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.user.count(),
+    ]);
+
+    const weeklyMap = await weeklyTotalsMap(users.map((u) => u.id), weekStart);
+
+    const rows = users.map((u, idx) => {
+      const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+      return {
+        id: u.id,
+        username: u.username,
+        fullName,
+        contact: u.email || u.phone || null,
+        avatarUrl: firstAvatar(u.minime),
+        weeklyPoints: weeklyMap.get(u.id) || 0,
+        allTimePoints: Number(u.totalPoints || 0),
+        rank: (page - 1) * pageSize + idx + 1,
+      };
+    });
+
+    res.render('admin/pages/leaderboard/users', {
+      layout: 'admin/layouts/main',
+      title: 'Leaderboard · Users',
+      users: rows,
+      total, page,
+      totalPages: Math.ceil(total / pageSize),
+      baseUrl: '/admin/leaderboard/users',
+      weekLabel: weekLabel(weekStart),
+    });
+  } catch (error) {
+    console.error('List user leaderboard error:', error);
+    req.flash('error', 'Failed to load user leaderboard.');
+    res.redirect('/admin/dashboard');
+  }
+};
+
 /* ------------------------ member leaderboard (detail) ------------------------ */
 // Members of one community ranked by all-time total points, with weekly + avatar.
 exports.showCommunityLeaderboard = async (req, res) => {
