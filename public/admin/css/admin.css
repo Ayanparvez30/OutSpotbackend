@@ -478,6 +478,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 /* Icon action states (e.g. challenge feature star / power toggle) */
 .row-action.star-on  { color: #fbbf24; border-color: rgba(251, 191, 36, 0.40); }
 .row-action.power-on { color: #34d399; border-color: rgba(52, 211, 153, 0.40); }
+/* Destructive icon action (e.g. delete) — stays muted until hovered, then red */
+.row-action.danger:hover { color: #fb7185; border-color: rgba(245, 54, 92, 0.40); background: rgba(245, 54, 92, 0.08); }
 
 .row-action {
   display: inline-grid; place-items: center;

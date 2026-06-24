@@ -69,13 +69,17 @@
             <td><%= item.isFeatured ? 'Yes' : '-' %></td>
             <td><%= item._count.inventories %></td>
             <td>
-              <div class="d-flex gap-1">
-                <a href="/admin/shop/<%= item.id %>/edit" class="btn btn-sm btn-outline-primary">Edit</a>
+              <div class="d-flex gap-2">
+                <a href="/admin/shop/<%= item.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
                 <form method="POST" action="/admin/shop/<%= item.id %>/feature" style="display:inline">
-                  <button class="btn btn-sm btn-outline-info"><%= item.isFeatured ? 'Unfeature' : 'Feature' %></button>
+                  <button class="row-action<%= item.isFeatured ? ' star-on' : '' %>" title="<%= item.isFeatured ? 'Unfeature' : 'Feature' %>">
+                    <i class="bi <%= item.isFeatured ? 'bi-star-fill' : 'bi-star' %>"></i>
+                  </button>
                 </form>
                 <form method="POST" action="/admin/shop/<%= item.id %>/delete" style="display:inline">
-                  <button class="btn btn-sm btn-outline-danger" data-confirm="Delete this item?">Delete</button>
+                  <button class="row-action danger" data-confirm="Delete this item?" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 </form>
               </div>
             </td>
