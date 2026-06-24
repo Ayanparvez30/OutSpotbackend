@@ -18,6 +18,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if (form) {
         confirmBtn.onclick = () => {
           modal.hide();
+          // form.submit() does NOT include the clicked submit button's name/value.
+          // Multi-action forms (e.g. report Warn/Ban/Deactivate, which all post
+          // `action=...` from one form) relied on it, so the server saw no action
+          // and did nothing. Inject the button's name/value as a hidden field first.
+          // Single-action buttons (no `name`, e.g. user Ban/Delete) are unaffected.
+          if (el.tagName === 'BUTTON' && el.name) {
+            let hidden = form.querySelector('input[data-confirm-injected]');
+            if (!hidden) {
+              hidden = document.createElement('input');
+              hidden.type = 'hidden';
+              hidden.setAttribute('data-confirm-injected', '');
+              form.appendChild(hidden);
+            }
+            hidden.name = el.name;
+            hidden.value = el.value;
+          }
           form.submit();
         };
       }

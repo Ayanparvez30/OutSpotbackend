@@ -665,6 +665,12 @@ exports.login = async (req, res) => {
     if (!user.isVerified) {
       return response.response_with_code(res, 403, 'User not verified');
     }
+    if (user.isBanned) {
+      return response.response_with_code(res, 403, 'Your account has been banned.');
+    }
+    if (user.isActive === false) {
+      return response.response_with_code(res, 403, 'Your account has been deactivated.');
+    }
 
     const newToken = randomKey(40);
 

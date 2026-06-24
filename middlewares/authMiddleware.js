@@ -24,6 +24,16 @@ exports.checkAuth = async (req, res, next) => {
             return res.status(401).json({ message: 'Invalid authorization token' });
         }
 
+        // Block banned / deactivated accounts on every authenticated request.
+        // Columns already exist (User.isBanned / isActive). The app should treat
+        // these like a forced logout and surface the message to the user.
+        if (user.isBanned) {
+            return res.status(403).json({ message: 'Your account has been banned.', code: 'ACCOUNT_BANNED', reason: user.banReason || undefined });
+        }
+        if (user.isActive === false) {
+            return res.status(403).json({ message: 'Your account has been deactivated.', code: 'ACCOUNT_DEACTIVATED' });
+        }
+
         // Attach minimal user info for controller usage
         req.authData = {
             id: user.id,

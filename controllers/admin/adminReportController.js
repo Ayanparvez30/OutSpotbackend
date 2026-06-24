@@ -176,13 +176,14 @@ exports.takeAction = async (req, res) => {
       case 'ban':
         await prisma.user.update({
           where: { id: userId },
-          data: { isBanned: true, bannedAt: new Date(), banReason: `Enforcement from Report #${reportId}` },
+          // Clear the token too so the banned user is logged out on next request.
+          data: { isBanned: true, bannedAt: new Date(), banReason: `Enforcement from Report #${reportId}`, authorization: null },
         });
         break;
       case 'deactivate':
         await prisma.user.update({
           where: { id: userId },
-          data: { isActive: false },
+          data: { isActive: false, authorization: null },
         });
         break;
     }

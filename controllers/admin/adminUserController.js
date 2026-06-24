@@ -192,7 +192,8 @@ exports.banUser = async (req, res) => {
     const { reason } = req.body;
     await prisma.user.update({
       where: { id: userId },
-      data: { isBanned: true, bannedAt: new Date(), banReason: reason || null },
+      // Clear the auth token so the banned user is logged out on their next request.
+      data: { isBanned: true, bannedAt: new Date(), banReason: reason || null, authorization: null },
     });
     req.flash('success', 'User has been banned.');
     res.redirect(`/admin/users/${userId}`);
@@ -222,7 +223,7 @@ exports.unbanUser = async (req, res) => {
 exports.deactivateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
-    await prisma.user.update({ where: { id: userId }, data: { isActive: false } });
+    await prisma.user.update({ where: { id: userId }, data: { isActive: false, authorization: null } });
     req.flash('success', 'User deactivated.');
     res.redirect(`/admin/users/${userId}`);
   } catch (error) {
