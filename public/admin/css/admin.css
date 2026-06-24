@@ -308,6 +308,24 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
   --bs-btn-hover-border-color: var(--os-pink);
 }
 
+/* ---------------- Tab pills (e.g. Leaderboard Communities/Users) ---------------- */
+/* Bootstrap's default active pill is blue; override to the brand gradient so it
+   matches the sidebar active item and btn-gradient buttons. */
+.nav-pills {
+  --bs-nav-pills-link-active-bg: transparent;
+  gap: 0.5rem;
+}
+.nav-pills .nav-link {
+  color: var(--os-muted);
+  border-radius: 8px;
+  font-weight: 600;
+}
+.nav-pills .nav-link:hover { color: #fff; }
+.nav-pills .nav-link.active {
+  background: var(--os-grad);
+  color: #fff;
+}
+
 /* ---------------- Badges (status) ---------------- */
 .badge-pending  { background-color: rgba(245, 54, 92, 0.18);  color: #fb7185; }
 .badge-reviewed { background-color: rgba(56, 189, 248, 0.18); color: #38bdf8; }
