@@ -23,9 +23,9 @@
             <td><%= b.points %></td>
             <td>
               <% if (b.isActive) { %>
-                <span class="badge bg-success">Active</span>
+                <span class="status-pill status-active">Active</span>
               <% } else { %>
-                <span class="badge bg-secondary">Inactive</span>
+                <span class="status-pill status-inactive">Inactive</span>
               <% } %>
             </td>
             <td><a href="/admin/points/bundles/<%= b.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a></td>
