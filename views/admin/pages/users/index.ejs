@@ -60,7 +60,7 @@
             <td><%= u.createdAt.toLocaleDateString() %></td>
             <td>
               <% if (u.isBanned) { %>
-                <span class="status-pill status-blocked">Blocked</span>
+                <span class="status-pill status-blocked">Banned</span>
               <% } else if (!u.isActive) { %>
                 <span class="status-pill status-inactive">Inactive</span>
               <% } else { %>

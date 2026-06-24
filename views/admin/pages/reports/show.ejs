@@ -83,8 +83,16 @@
           <input type="hidden" name="targetUserId" value="<%= report.reported.id %>">
           <div class="d-grid gap-2">
             <button type="submit" name="action" value="warn" class="btn btn-warning" data-confirm="Send a warning to this user?">Warn User</button>
-            <button type="submit" name="action" value="ban" class="btn btn-danger" data-confirm="Ban this user?">Ban User</button>
-            <button type="submit" name="action" value="deactivate" class="btn btn-secondary" data-confirm="Deactivate this user's account?">Deactivate Account</button>
+            <% if (report.reported.isBanned) { %>
+              <button type="submit" name="action" value="unban" class="btn btn-success" data-confirm="Unban this user?">Unban User</button>
+            <% } else { %>
+              <button type="submit" name="action" value="ban" class="btn btn-danger" data-confirm="Ban this user?">Ban User</button>
+            <% } %>
+            <% if (report.reported.isActive) { %>
+              <button type="submit" name="action" value="deactivate" class="btn btn-secondary" data-confirm="Deactivate this user's account?">Deactivate Account</button>
+            <% } else { %>
+              <button type="submit" name="action" value="activate" class="btn btn-secondary" data-confirm="Reactivate this user's account?">Activate Account</button>
+            <% } %>
           </div>
         </form>
       </div>

@@ -186,6 +186,18 @@ exports.takeAction = async (req, res) => {
           data: { isActive: false, authorization: null },
         });
         break;
+      case 'unban':
+        await prisma.user.update({
+          where: { id: userId },
+          data: { isBanned: false, bannedAt: null, banReason: null },
+        });
+        break;
+      case 'activate':
+        await prisma.user.update({
+          where: { id: userId },
+          data: { isActive: true },
+        });
+        break;
     }
 
     await prisma.report.update({
