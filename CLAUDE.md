@@ -32,9 +32,10 @@ node scripts/backup-db.js              # manual mysqldump backup (also runs dail
 
 # Tests — each file is a standalone node script, NOT a runner (jest/mocha absent).
 node tests/<name>.test.js              # run one test; exits 1 on failure
+for f in tests/*.test.js; do node "$f" || echo "FAILED: $f"; done   # "run all"
 ```
 
-Tests stub `prisma`, `googlePlaces`, S3, etc. via `require.cache` manipulation and assert with a local `assert()`/`eq()` helper, printing `Result: N passed, M failed` and calling `process.exit(FAIL > 0 ? 1 : 0)`. There is no aggregate "run all tests" command — run files individually, or loop over `tests/*.test.js` in a shell.
+Tests stub `prisma`, `googlePlaces`, S3, etc. via `require.cache` manipulation and assert with a local `assert()`/`eq()` helper, printing `Result: N passed, M failed` and calling `process.exit(FAIL > 0 ? 1 : 0)`. There is no aggregate "run all tests" command — run files individually, or loop over `tests/*.test.js` as above. Only `*.test.js` files are tests: the other `tests/*.js` (`check-latest-minime.js`, `check-s3-sizes.js`, `test-all-changes.js`, `test-body-shapes.js`) and most `scripts/*.js` are one-off diagnostic/backfill scripts that hit real services — don't run them blindly.
 
 ## Architecture
 

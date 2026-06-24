@@ -1,0 +1,59 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Leaderboard</h1>
+    <p class="page-subtitle">Communities ranked by all-time points · weekly window <%= weekLabel %></p>
+  </div>
+  <span class="text-muted align-self-center"><%= total %> communities</span>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th style="width:60px">#</th>
+          <th>Community</th>
+          <th>Creator</th>
+          <th class="text-end">Members</th>
+          <th class="text-end">Weekly pts</th>
+          <th class="text-end">All-time pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% communities.forEach(c => { %>
+          <tr class="js-row-link" data-href="/admin/leaderboard/<%= c.id %>" style="cursor:pointer">
+            <td class="fw-bold text-muted"><%= c.rank %></td>
+            <td>
+              <div class="user-cell">
+                <% if (c.imageUrl) { %>
+                  <img src="<%= c.imageUrl %>" class="community-thumb" alt="">
+                <% } else { %>
+                  <span class="community-thumb-fallback"><i class="bi bi-people"></i></span>
+                <% } %>
+                <span class="user-name"><%= c.name %></span>
+              </div>
+            </td>
+            <td><% if (c.creator) { %><a href="/admin/users/<%= c.creator.id %>">@<%= c.creator.username %></a><% } else { %><span class="text-muted">—</span><% } %></td>
+            <td class="text-end"><%= c.membersCount.toLocaleString() %></td>
+            <td class="text-end"><%= c.weeklyPoints.toLocaleString() %></td>
+            <td class="text-end fw-semibold"><%= c.allTimePoints.toLocaleString() %></td>
+          </tr>
+        <% }) %>
+        <% if (communities.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No communities found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<script>
+  document.querySelectorAll('.js-row-link').forEach(function (row) {
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('a, button, .row-action')) return;
+      window.location = row.dataset.href;
+    });
+  });
+</script>

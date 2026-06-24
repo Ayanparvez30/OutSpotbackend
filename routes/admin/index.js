@@ -13,6 +13,7 @@ router.use('/users', require('./userRoutes'));
 router.use('/communities', require('./communityRoutes'));
 router.use('/friends', require('./friendRoutes'));
 router.use('/challenges', require('./challengeRoutes'));
+router.use('/leaderboard', require('./leaderboardRoutes'));
 router.use('/shop', require('./shopRoutes'));
 router.use('/premades', require('./premadeRoutes'));
 router.use('/body-shapes', require('./bodyShapeRoutes'));
