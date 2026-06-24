@@ -19,10 +19,11 @@
 
     <div class="sidebar-section">People</div>
     <ul class="nav flex-column">
-      <li class="nav-item"><a class="nav-link <%= isActive('/admin/users') %>" href="/admin/users"><i class="bi bi-people"></i>Users</a></li>
+      <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/users/moderation') === 0 ? '' : isActive('/admin/users') %>" href="/admin/users"><i class="bi bi-people"></i>Users</a></li>
       <li class="nav-item"><a class="nav-link <%= isActive('/admin/communities') %>" href="/admin/communities"><i class="bi bi-building"></i>Communities</a></li>
       <li class="nav-item"><a class="nav-link <%= currentPath.indexOf('/admin/friends/blocks') === 0 ? '' : isActive('/admin/friends') %>" href="/admin/friends"><i class="bi bi-person-plus"></i>Friendships</a></li>
       <li class="nav-item"><a class="nav-link <%= isActive('/admin/friends/blocks') %>" href="/admin/friends/blocks"><i class="bi bi-slash-circle"></i>Blocks</a></li>
+      <li class="nav-item"><a class="nav-link <%= isActive('/admin/users/moderation') %>" href="/admin/users/moderation"><i class="bi bi-shield-exclamation"></i>Banned &amp; Inactive</a></li>
     </ul>
 
     <div class="sidebar-section">Gameplay</div>

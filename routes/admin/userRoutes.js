@@ -4,6 +4,7 @@ const ctrl = require('../../controllers/admin/adminUserController');
 
 router.get('/export/csv', ctrl.exportCsv);
 router.get('/', ctrl.listUsers);
+router.get('/moderation', ctrl.listModeration);
 router.get('/:id', ctrl.showUser);
 router.get('/:id/edit', ctrl.editUserForm);
 router.post('/:id/edit', ctrl.updateUser);

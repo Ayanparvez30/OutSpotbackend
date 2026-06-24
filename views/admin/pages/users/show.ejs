@@ -62,11 +62,13 @@
           </form>
         <% } %>
 
-        <% if (user.isActive) { %>
+        <%# Deactivate temporarily disabled — ban-only for now. Re-enable by changing `if (false)` below to `if (user.isActive)`. %>
+        <% if (false) { %>
           <form method="POST" action="/admin/users/<%= user.id %>/deactivate" class="mb-2">
             <button class="btn btn-sm btn-warning w-100" data-confirm="Deactivate this user?">Deactivate</button>
           </form>
-        <% } else { %>
+        <% } %>
+        <% if (!user.isActive) { %>
           <form method="POST" action="/admin/users/<%= user.id %>/activate" class="mb-2">
             <button class="btn btn-sm btn-success w-100">Activate</button>
           </form>

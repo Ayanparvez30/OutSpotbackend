@@ -1,0 +1,71 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Banned &amp; Inactive</h1>
+    <p class="page-subtitle">Moderated accounts — unban or reactivate from here</p>
+  </div>
+  <span class="text-muted align-self-center"><%= total %> accounts</span>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+  <a href="/admin/users/moderation" class="btn btn-sm <%= !filter ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
+  <a href="/admin/users/moderation?filter=banned" class="btn btn-sm <%= filter === 'banned' ? 'btn-primary' : 'btn-outline-secondary' %>">Banned</a>
+  <a href="/admin/users/moderation?filter=inactive" class="btn btn-sm <%= filter === 'inactive' ? 'btn-primary' : 'btn-outline-secondary' %>">Inactive</a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>User</th><th>Points</th><th>Status</th><th>Reason</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <% users.forEach(u => {
+             const avatar = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+             const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+             const initials = (fullName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        %>
+          <tr>
+            <td>
+              <a href="/admin/users/<%= u.id %>" class="user-cell">
+                <% if (avatar) { %>
+                  <img src="<%= avatar %>" class="user-avatar" alt="">
+                <% } else { %>
+                  <span class="user-avatar-fallback"><%= initials %></span>
+                <% } %>
+                <span>
+                  <span class="user-name d-block"><%= fullName %></span>
+                  <span class="user-email"><%= u.email || u.phone || 'no email' %></span>
+                </span>
+              </a>
+            </td>
+            <td class="fw-semibold"><%= (u.totalPoints || 0).toLocaleString() %></td>
+            <td>
+              <% if (u.isBanned) { %><span class="status-pill status-blocked">Banned</span><% } %>
+              <% if (!u.isActive) { %><span class="status-pill status-inactive">Inactive</span><% } %>
+            </td>
+            <td class="text-secondary"><%= u.banReason || '-' %></td>
+            <td>
+              <div class="d-flex justify-content-end gap-2">
+                <% if (u.isBanned) { %>
+                  <form method="POST" action="/admin/users/<%= u.id %>/unban" style="display:inline">
+                    <button class="row-action power-on" title="Unban" data-confirm="Unban this user?"><i class="bi bi-unlock"></i></button>
+                  </form>
+                <% } %>
+                <% if (!u.isActive) { %>
+                  <form method="POST" action="/admin/users/<%= u.id %>/activate" style="display:inline">
+                    <button class="row-action power-on" title="Activate" data-confirm="Reactivate this user?"><i class="bi bi-power"></i></button>
+                  </form>
+                <% } %>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (users.length === 0) { %>
+          <tr><td colspan="5" class="text-center text-muted py-3">No banned or inactive accounts.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

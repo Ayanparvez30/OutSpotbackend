@@ -125,6 +125,51 @@ exports.showUser = async (req, res) => {
   }
 };
 
+// Moderation list — banned and/or deactivated accounts in one place, with
+// quick unban / reactivate actions. ?filter=banned|inactive narrows it.
+exports.listModeration = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = 20;
+    const filter = req.query.filter;
+
+    let where;
+    if (filter === 'banned') where = { isBanned: true };
+    else if (filter === 'inactive') where = { isActive: false, isBanned: false };
+    else where = { OR: [{ isBanned: true }, { isActive: false }] };
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, username: true, email: true, phone: true,
+          firstName: true, lastName: true, totalPoints: true,
+          isActive: true, isBanned: true, bannedAt: true, banReason: true,
+          minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize);
+    const baseUrl = `/admin/users/moderation${filter ? `?filter=${filter}` : ''}`;
+
+    res.render('admin/pages/users/moderation', {
+      layout: 'admin/layouts/main',
+      title: 'Banned & Inactive',
+      users, total, page, totalPages, baseUrl,
+      filter: filter || '',
+    });
+  } catch (error) {
+    console.error('List moderation error:', error);
+    req.flash('error', 'Failed to load moderation list.');
+    res.redirect('/admin/dashboard');
+  }
+};
+
 exports.editUserForm = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: parseInt(req.params.id) } });

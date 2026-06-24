@@ -88,9 +88,11 @@
             <% } else { %>
               <button type="submit" name="action" value="ban" class="btn btn-danger" data-confirm="Ban this user?">Ban User</button>
             <% } %>
-            <% if (report.reported.isActive) { %>
+            <%# Deactivate temporarily disabled — ban-only for now. Re-enable by changing `if (false)` below to `if (report.reported.isActive)`. %>
+            <% if (false) { %>
               <button type="submit" name="action" value="deactivate" class="btn btn-secondary" data-confirm="Deactivate this user's account?">Deactivate Account</button>
-            <% } else { %>
+            <% } %>
+            <% if (!report.reported.isActive) { %>
               <button type="submit" name="action" value="activate" class="btn btn-secondary" data-confirm="Reactivate this user's account?">Activate Account</button>
             <% } %>
           </div>
