@@ -28,7 +28,7 @@
                 <span class="badge bg-secondary">Inactive</span>
               <% } %>
             </td>
-            <td><a href="/admin/points/bundles/<%= b.id %>/edit" class="btn btn-sm btn-outline-primary">Edit</a></td>
+            <td><a href="/admin/points/bundles/<%= b.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a></td>
           </tr>
         <% }) %>
         <% if (bundles.length === 0) { %>

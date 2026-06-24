@@ -8,15 +8,29 @@
 
 <div class="card">
   <div class="card-body p-0">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 align-middle">
       <thead>
         <tr><th>ID</th><th>User</th><th>Product</th><th>Points</th><th>Store Price</th><th>Date</th></tr>
       </thead>
       <tbody>
-        <% purchases.forEach(p => { %>
+        <% purchases.forEach(p => {
+             const u = p.user;
+             const avatar = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+             const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+             const initials = (fullName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        %>
           <tr>
             <td><%= p.id %></td>
-            <td><a href="/admin/users/<%= p.user.id %>"><%= p.user.username %></a></td>
+            <td>
+              <a href="/admin/users/<%= u.id %>" class="user-cell">
+                <% if (avatar) { %>
+                  <img src="<%= avatar %>" class="user-avatar" alt="">
+                <% } else { %>
+                  <span class="user-avatar-fallback"><%= initials %></span>
+                <% } %>
+                <span class="user-name"><%= u.username %></span>
+              </a>
+            </td>
             <td><%= p.productId %></td>
             <td><%= p.points %></td>
             <td>$<%= Number(p.priceUsd).toFixed(2) %></td>

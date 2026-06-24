@@ -25,7 +25,7 @@
             <td><%= p.googleProductId || '-' %></td>
             <td><%= p.factor %>x</td>
             <td><%= p.hours %>h</td>
-            <td><a href="/admin/points/multipliers/<%= p.id %>/edit" class="btn btn-sm btn-outline-primary">Edit</a></td>
+            <td><a href="/admin/points/multipliers/<%= p.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a></td>
           </tr>
         <% }) %>
         <% if (products.length === 0) { %>

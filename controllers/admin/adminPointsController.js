@@ -118,7 +118,14 @@ exports.viewLedger = async (req, res) => {
     const [entries, total] = await Promise.all([
       prisma.pointsLedger.findMany({
         where,
-        include: { user: { select: { id: true, username: true } } },
+        include: {
+          user: {
+            select: {
+              id: true, username: true, firstName: true, lastName: true,
+              minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -252,7 +259,14 @@ exports.listPurchases = async (req, res) => {
 
     const [purchases, total] = await Promise.all([
       prisma.pointBundlePurchase.findMany({
-        include: { user: { select: { id: true, username: true } } },
+        include: {
+          user: {
+            select: {
+              id: true, username: true, firstName: true, lastName: true,
+              minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
