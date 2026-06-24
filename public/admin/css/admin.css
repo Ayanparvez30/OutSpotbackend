@@ -481,6 +481,18 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 /* Destructive icon action (e.g. delete) — stays muted until hovered, then red */
 .row-action.danger:hover { color: #fb7185; border-color: rgba(245, 54, 92, 0.40); background: rgba(245, 54, 92, 0.08); }
 
+/* Inline text actions for the reports table (Review / Resolve / Warn / Ban) */
+.report-actions { display: flex; gap: 1.1rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.report-actions form { display: inline; margin: 0; }
+.report-action {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  font-weight: 600; font-size: 0.85rem; color: var(--os-muted); text-decoration: none;
+}
+.report-action:hover     { color: #fff; }
+.report-action.is-warn:hover  { color: #fbbf24; }
+.report-action.is-ban:hover   { color: #fb7185; }
+.report-action.is-unban:hover { color: #34d399; }
+
 .row-action {
   display: inline-grid; place-items: center;
   width: 32px; height: 32px; border-radius: 8px;

@@ -21,7 +21,7 @@ exports.listReports = async (req, res) => {
         where,
         include: {
           reporter: { select: { id: true, username: true, firstName: true, lastName: true, minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } } } },
-          reported: { select: { id: true, username: true, firstName: true, lastName: true, minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } } } },
+          reported: { select: { id: true, username: true, firstName: true, lastName: true, isBanned: true, minime: { where: { isSaved: true }, orderBy: { updatedAt: 'desc' }, take: 1, select: { avatarUrl: true } } } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
@@ -143,13 +143,15 @@ exports.updateStatus = async (req, res) => {
     const reportId = parseInt(req.params.id);
     const { status, adminNote } = req.body;
 
-    await prisma.report.update({
-      where: { id: reportId },
-      data: { status, adminNote: adminNote || null, reviewedAt: new Date() },
-    });
+    const data = { status, reviewedAt: new Date() };
+    // Only touch adminNote when the form actually sent it (the detail page does).
+    // Inline list actions (Review/Resolve) omit it, so the existing note is kept.
+    if (adminNote !== undefined) data.adminNote = adminNote || null;
+
+    await prisma.report.update({ where: { id: reportId }, data });
 
     req.flash('success', `Report #${reportId} updated to ${status}.`);
-    res.redirect(`/admin/reports/${reportId}`);
+    res.redirect(req.get('Referer') || '/admin/reports');
   } catch (error) {
     console.error('Update report error:', error);
     req.flash('error', 'Failed to update report.');
@@ -206,7 +208,7 @@ exports.takeAction = async (req, res) => {
     });
 
     req.flash('success', `Enforcement action "${action}" applied.`);
-    res.redirect(`/admin/reports/${reportId}`);
+    res.redirect(req.get('Referer') || '/admin/reports');
   } catch (error) {
     console.error('Take action error:', error);
     req.flash('error', 'Failed to take action.');
