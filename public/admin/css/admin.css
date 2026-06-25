@@ -179,10 +179,10 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
   color: #fff;
 }
 .admin-sidebar .nav-link.active {
-  background: var(--os-grad-active);
+  background: linear-gradient(135deg, #ec4899, #fb7185);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 6px 18px rgba(245, 54, 92, 0.30);
+  box-shadow: 0 6px 18px rgba(236, 72, 153, 0.30);
 }
 
 /* ---------------- Navbar (top) ---------------- */
