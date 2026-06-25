@@ -43,18 +43,18 @@
             <td><%= f.requestedAt.toLocaleDateString() %></td>
             <td><%= f.acceptedAt ? f.acceptedAt.toLocaleDateString() : '-' %></td>
             <td>
-              <div class="d-flex gap-1 justify-content-end">
+              <div class="d-flex gap-2 justify-content-end">
                 <% if (f.status === 'PENDING') { %>
                   <form method="POST" action="/admin/friends/<%= f.id %>/approve" style="display:inline">
-                    <button class="btn btn-sm btn-outline-success">Approve</button>
+                    <button class="row-action" title="Approve"><i class="bi bi-check-lg"></i></button>
                   </form>
                 <% } else { %>
                   <form method="POST" action="/admin/friends/<%= f.id %>/revoke" style="display:inline">
-                    <button class="btn btn-sm btn-outline-warning">Revoke</button>
+                    <button class="row-action" title="Revoke"><i class="bi bi-x-lg"></i></button>
                   </form>
                 <% } %>
                 <form method="POST" action="/admin/friends/<%= f.id %>/remove" style="display:inline">
-                  <button class="btn btn-sm btn-outline-danger" data-confirm="Remove this friendship?">Remove</button>
+                  <button class="row-action danger" title="Remove" data-confirm="Remove this friendship?"><i class="bi bi-trash"></i></button>
                 </form>
               </div>
             </td>
