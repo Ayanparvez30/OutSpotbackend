@@ -3,18 +3,8 @@
   <p class="page-subtitle">All point transactions</p>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <div>
-    <span class="text-muted"><%= total %> entries</span>
-  </div>
-  <div class="d-flex gap-2">
-    <form method="GET" action="/admin/points/ledger" class="d-flex gap-2">
-      <input type="number" name="userId" class="form-control form-control-sm" placeholder="User ID" value="<%= userId %>" style="width:100px">
-      <input type="text" name="reason" class="form-control form-control-sm" placeholder="Reason" value="<%= reason %>" style="width:160px">
-      <button class="btn btn-sm btn-primary">Filter</button>
-      <a href="/admin/points/ledger" class="btn btn-sm btn-outline-secondary">Clear</a>
-    </form>
-  </div>
+<div class="mb-3">
+  <span class="text-muted"><%= total %> entries</span>
 </div>
 
 <div class="card">

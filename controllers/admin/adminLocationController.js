@@ -14,7 +14,15 @@ exports.listLocationPoints = async (req, res) => {
     const [locationPoints, total] = await Promise.all([
       prisma.locationPoint.findMany({
         where,
-        include: { user: { select: { id: true, username: true } } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              minime: { where: { isSaved: true }, select: { avatarUrl: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,

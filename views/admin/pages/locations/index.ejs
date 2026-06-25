@@ -1,3 +1,17 @@
+<%
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function userCell(u){
+    if (!u) return '-';
+    const av = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+    const nm = u.username || '';
+    const initials = (nm || '?').trim().slice(0, 2).toUpperCase();
+    const img = av
+      ? `<img src="${esc(av)}" class="user-avatar" alt="">`
+      : `<span class="user-avatar-fallback">${esc(initials)}</span>`;
+    return `<a href="/admin/users/${u.id}" class="user-cell">${img}<span class="user-name">@${esc(nm)}</span></a>`;
+  }
+%>
+
 <div class="d-flex justify-content-between align-items-start mb-3">
   <div>
     <h1 class="page-title">Location Points</h1>
@@ -34,7 +48,7 @@
             </td>
             <td class="fw-semibold"><%= lp.placeName || '-' %></td>
             <td><%= lp.points %></td>
-            <td><a href="/admin/users/<%= lp.user.id %>">@<%= lp.user.username %></a></td>
+            <td><%- userCell(lp.user) %></td>
             <td><%= lp.createdAt.toLocaleString() %></td>
             <td>
               <div class="d-flex justify-content-end gap-2">
