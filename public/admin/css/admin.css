@@ -238,6 +238,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 }
 .stat-trend.up   { color: #34d399; }
 .stat-trend.down { color: #fb7185; }
+.stat-trend.flat { color: var(--os-muted); }
 .stat-value {
   font-size: 1.9rem;
   font-weight: 800;
