@@ -328,9 +328,9 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 }
 
 /* ---------------- Badges (status) ---------------- */
-.badge-pending  { background-color: rgba(245, 54, 92, 0.18);  color: #fb7185; }
-.badge-reviewed { background-color: rgba(56, 189, 248, 0.18); color: #38bdf8; }
-.badge-resolved { background-color: rgba(52, 211, 153, 0.18); color: #34d399; }
+.badge-pending  { background-color: #fb7185; color: #fff; }
+.badge-reviewed { background-color: #fca5a5; color: #fff; }
+.badge-resolved { background-color: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
 
 .sev-high   { background-color: rgba(245, 54, 92, 0.20);  color: #fb7185; }
 .sev-medium { background-color: rgba(251, 146, 60, 0.20); color: #fb923c; }
