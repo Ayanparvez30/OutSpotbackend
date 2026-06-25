@@ -471,8 +471,8 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 
 /* Status pills — consistent across the whole panel */
 .status-pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
-.status-active   { background: rgba(245, 54, 92, 0.18); color: #fb7185; }
-.status-inactive { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+.status-active   { background: #fb7185; color: #fff; }
+.status-inactive { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
 .status-blocked  { background: #e11d48; color: #fff; }
 .status-pending  { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
 .status-accepted { background: #fb7185; color: #fff; }
