@@ -6,8 +6,9 @@
   <a href="/admin/users/export/csv" class="btn btn-gradient"><i class="bi bi-download me-2"></i>Export CSV</a>
 </div>
 
-<form method="GET" action="/admin/users" class="mb-3">
-  <input type="text" name="q" class="form-control" placeholder="Search by name, email, referral, city..." value="<%= search %>">
+<form method="GET" action="/admin/users" class="d-flex gap-2 mb-3">
+  <input type="text" name="q" class="form-control" placeholder="Search by name, email, referral, city..." value="<%= search %>" style="max-width:340px">
+  <button class="btn btn-primary"><i class="bi bi-search me-1"></i>Search</button>
 </form>
 
 <div class="card">
