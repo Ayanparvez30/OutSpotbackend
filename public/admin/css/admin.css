@@ -490,7 +490,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 .report-actions form { display: inline; margin: 0; }
 .report-action {
   background: transparent; border: none; padding: 0; cursor: pointer;
-  font-weight: 600; font-size: 0.85rem; color: var(--os-muted); text-decoration: none;
+  font-weight: 600; font-size: 0.85rem; color: #fff; text-decoration: none;
 }
 .report-action:hover     { color: #fff; }
 .report-action.is-warn:hover  { color: #fbbf24; }
@@ -500,7 +500,7 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 .row-action {
   display: inline-grid; place-items: center;
   width: 32px; height: 32px; border-radius: 8px;
-  color: var(--os-muted); border: 1px solid var(--os-border);
+  color: #fff; border: 1px solid var(--os-border);
   background: transparent; cursor: pointer; padding: 0;
 }
 .row-action:hover { color: #fff; border-color: var(--os-border-2); background: rgba(255,255,255,0.04); }
