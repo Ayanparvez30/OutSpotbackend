@@ -328,6 +328,11 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 }
 
 /* ---------------- Badges (status) ---------------- */
+/* Capsule shape + sizing matched to .status-pill so report badges look
+   identical to the status pills used on other admin pages. */
+.badge-pending, .badge-reviewed, .badge-resolved {
+  border-radius: 999px; padding: 4px 12px; font-size: 0.72rem; font-weight: 600;
+}
 .badge-pending  { background-color: #fb7185; color: #fff; }
 .badge-reviewed { background-color: #fca5a5; color: #fff; }
 .badge-resolved { background-color: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
