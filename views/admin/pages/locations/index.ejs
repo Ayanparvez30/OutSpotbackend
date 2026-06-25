@@ -29,7 +29,7 @@
               <% if (lp.mediaUrl) { %>
                 <a href="<%= lp.mediaUrl %>" target="_blank"><img src="<%= lp.mediaUrl %>" alt="evidence" style="width:48px;height:48px;object-fit:cover;border-radius:8px"></a>
               <% } else { %>
-                <span class="community-thumb-fallback"><i class="bi bi-image"></i></span>
+                <span class="text-muted small">— No photo</span>
               <% } %>
             </td>
             <td class="fw-semibold"><%= lp.placeName || '-' %></td>

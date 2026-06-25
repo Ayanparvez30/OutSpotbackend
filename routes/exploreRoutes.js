@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 const { checkAuth } = require('../middlewares/authMiddleware');
 const {
   getCategoryPlaces,
@@ -30,8 +32,9 @@ router.get('/explore/posts', checkAuth, getExplorePosts);
 // Optional detail
 router.get('/explore/place/:placeId', checkAuth, getPlaceDetail);
 
-// Visit/Check-in → points award
-router.post('/explore/visit', checkAuth, recordVisit);
+// Visit/Check-in → points award. Accepts an optional evidence photo
+// (multipart field "media"); JSON-only clients still work (no file).
+router.post('/explore/visit', checkAuth, upload.single('media'), recordVisit);
 
 // ===================== Restaurants =====================
 // Tabs list: Trending | Popular | Bars | Outdoors | Events

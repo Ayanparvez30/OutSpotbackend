@@ -3,6 +3,7 @@ const prisma = new PrismaClient();
 const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, textSearch, photoUrlByRef } = require('../utils/googlePlaces');
 const { addPointsWithMultiplier } = require('../utils/points');
 const { pointsForPlace } = require('../utils/pointsForPlace');
+const uploadToS3 = require('../utils/s3Upload');
 
 const toRad = d => (d * Math.PI) / 180;
 const haversineMeters = (a, b) => {
@@ -602,10 +603,22 @@ exports.recordVisit = async (req, res) => {
       userRatingsTotal: placeReviewCount,
     });
 
+    // Evidence photo: prefer the uploaded file (check-in camera capture); fall
+    // back to a mediaUrl passed in the body (older clients), else empty string.
+    // An upload hiccup must NOT block the check-in / point award.
+    let evidenceUrl = mediaUrl || '';
+    if (req.file) {
+      try {
+        evidenceUrl = await uploadToS3(req.file, 'points');
+      } catch (e) {
+        console.error('recordVisit: evidence upload failed', e?.message);
+      }
+    }
+
     const created = await prisma.locationPoint.create({
       data: {
         userId,
-        mediaUrl: mediaUrl || '',
+        mediaUrl: evidenceUrl,
         placeId,
         placeName: (name && String(name).trim()) || placeNameFromGoogle || null,
         placeType: cat?.title || null,
