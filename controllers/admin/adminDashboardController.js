@@ -15,15 +15,6 @@ function pctTrend(curr, prev) {
   return { dir, text: `${sign}${Math.abs(pct).toFixed(1)}%` };
 }
 
-// Absolute delta trend ("+3" / "-2") — used where a percentage is less natural
-// (e.g. a small count of newly created challenges).
-function absTrend(curr, prev) {
-  const d = curr - prev;
-  const dir = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
-  const sign = d > 0 ? '+' : d < 0 ? '-' : '';
-  return { dir, text: `${sign}${Math.abs(d)}` };
-}
-
 exports.renderDashboard = async (req, res) => {
   try {
     const now = new Date();
@@ -41,11 +32,7 @@ exports.renderDashboard = async (req, res) => {
       newUsersPrevWeek,
       totalChallenges,
       activeChallenges,
-      challengesThisWeek,
-      challengesPrevWeek,
       pendingReports,
-      reportsThisWeek,
-      reportsPrevWeek,
       totalPurchases,
       purchasesPrevMonth,
       recentReports,
@@ -58,13 +45,7 @@ exports.renderDashboard = async (req, res) => {
       prisma.user.count({ where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
       prisma.challenge.count(),
       prisma.challenge.count({ where: { isActive: true } }),
-      // Challenges created this week vs last week → drives the "+N" trend.
-      prisma.challenge.count({ where: { createdAt: { gte: weekAgo } } }),
-      prisma.challenge.count({ where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
       prisma.report.count({ where: { status: 'PENDING' } }),
-      // Incoming reports this week vs last week → drives the Open Reports trend.
-      prisma.report.count({ where: { createdAt: { gte: weekAgo } } }),
-      prisma.report.count({ where: { createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
       prisma.pointBundlePurchase.count({ where: { createdAt: { gte: monthAgo } } }),
       // Previous 30-day window (days 31–60 ago) for the Purchases trend.
       prisma.pointBundlePurchase.count({ where: { createdAt: { gte: twoMonthsAgo, lt: monthAgo } } }),
@@ -99,10 +80,9 @@ exports.renderDashboard = async (req, res) => {
         activeChallenges,
         pendingReports,
         totalPurchases,
-        // Period-over-period trends shown on the stat cards.
+        // Period-over-period trends shown on the stat cards (New Users &
+        // Purchases only — Challenges/Reports intentionally have no trend).
         usersTrend: pctTrend(newUsersWeek, newUsersPrevWeek),
-        challengesTrend: absTrend(challengesThisWeek, challengesPrevWeek),
-        reportsTrend: pctTrend(reportsThisWeek, reportsPrevWeek),
         purchasesTrend: pctTrend(totalPurchases, purchasesPrevMonth),
       },
       recentReports,

@@ -24,12 +24,6 @@
     <div class="stat-card">
       <div class="stat-top">
         <span class="stat-icon"><i class="bi bi-trophy"></i></span>
-        <% if (metrics.challengesTrend) { %>
-          <span class="stat-trend <%= metrics.challengesTrend.dir %>">
-            <% if (metrics.challengesTrend.dir !== 'flat') { %><i class="bi bi-graph-<%= metrics.challengesTrend.dir === 'up' ? 'up-arrow' : 'down-arrow' %>"></i><% } %>
-            <%= metrics.challengesTrend.text %>
-          </span>
-        <% } %>
       </div>
       <div class="stat-value"><%= metrics.activeChallenges || 0 %></div>
       <div class="stat-label">Active Challenges</div>
@@ -54,12 +48,6 @@
     <div class="stat-card">
       <div class="stat-top">
         <span class="stat-icon"><i class="bi bi-flag"></i></span>
-        <% if (metrics.reportsTrend) { %>
-          <span class="stat-trend <%= metrics.reportsTrend.dir %>">
-            <% if (metrics.reportsTrend.dir !== 'flat') { %><i class="bi bi-graph-<%= metrics.reportsTrend.dir === 'up' ? 'up-arrow' : 'down-arrow' %>"></i><% } %>
-            <%= metrics.reportsTrend.text %>
-          </span>
-        <% } %>
       </div>
       <div class="stat-value"><%= metrics.pendingReports || 0 %></div>
       <div class="stat-label">Open Reports</div>
