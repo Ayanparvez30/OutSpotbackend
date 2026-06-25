@@ -1,5 +1,15 @@
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <span class="text-muted"><%= total %> location points</span>
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1 class="page-title">Location Points</h1>
+    <p class="page-subtitle">Points awarded for visiting / capturing real places · <%= total %> total</p>
+  </div>
+  <%# Placeholder — not wired up yet (needs a Place model + backend). %>
+  <button type="button" class="btn btn-gradient js-coming-soon align-self-center"><i class="bi bi-plus-lg me-1"></i>Add place</button>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <%# Placeholder — not wired up yet (needs a place-multiplier model + backend). %>
+  <button type="button" class="btn btn-gradient-warm js-coming-soon"><i class="bi bi-lightning-charge-fill me-2"></i>Add time-based multiplier for a place</button>
   <form method="GET" action="/admin/locations" class="d-flex gap-2">
     <input type="text" name="q" class="form-control form-control-sm" placeholder="Search place or user..." value="<%= search %>" style="width:220px">
     <button class="btn btn-sm btn-primary">Search</button>
@@ -8,43 +18,39 @@
 
 <div class="card">
   <div class="card-body p-0">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0 align-middle">
       <thead>
-        <tr><th>ID</th><th>User</th><th>Place</th><th>Points</th><th>Media</th><th>Lat/Lng</th><th>Date</th><th>Actions</th></tr>
+        <tr><th>Evidence</th><th>Place</th><th>Points</th><th>By</th><th>When</th><th class="text-end">Actions</th></tr>
       </thead>
       <tbody>
         <% locationPoints.forEach(lp => { %>
           <tr>
-            <td><%= lp.id %></td>
-            <td><a href="/admin/users/<%= lp.user.id %>"><%= lp.user.username %></a></td>
-            <td><%= lp.placeName || '-' %></td>
-            <td><%= lp.points %></td>
             <td>
               <% if (lp.mediaUrl) { %>
-                <a href="<%= lp.mediaUrl %>" target="_blank"><img src="<%= lp.mediaUrl %>" class="submission-img" alt="media" style="width:50px;height:50px"></a>
-              <% } else { %>-<% } %>
+                <a href="<%= lp.mediaUrl %>" target="_blank"><img src="<%= lp.mediaUrl %>" alt="evidence" style="width:48px;height:48px;object-fit:cover;border-radius:8px"></a>
+              <% } else { %>
+                <span class="community-thumb-fallback"><i class="bi bi-image"></i></span>
+              <% } %>
             </td>
+            <td class="fw-semibold"><%= lp.placeName || '-' %></td>
+            <td><%= lp.points %></td>
+            <td><a href="/admin/users/<%= lp.user.id %>">@<%= lp.user.username %></a></td>
+            <td><%= lp.createdAt.toLocaleString() %></td>
             <td>
-              <% if (lp.latitude && lp.longitude) { %>
-                <%= lp.latitude.toFixed(4) %>, <%= lp.longitude.toFixed(4) %>
-              <% } else { %>-<% } %>
-            </td>
-            <td><%= lp.createdAt.toLocaleDateString() %></td>
-            <td>
-              <div class="d-flex gap-1">
-                <form method="POST" action="/admin/locations/<%= lp.id %>/adjust" class="d-flex gap-1" style="display:inline">
-                  <input type="number" name="points" class="form-control form-control-sm" value="<%= lp.points %>" style="width:60px">
-                  <button class="btn btn-sm btn-outline-primary">Set</button>
-                </form>
+              <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="row-action js-edit-points" title="Edit points"
+                        data-id="<%= lp.id %>" data-points="<%= lp.points %>" data-place="<%= lp.placeName || '' %>">
+                  <i class="bi bi-pencil"></i>
+                </button>
                 <form method="POST" action="/admin/locations/<%= lp.id %>/delete" style="display:inline">
-                  <button class="btn btn-sm btn-outline-danger" data-confirm="Remove this location point?">Delete</button>
+                  <button class="row-action danger" title="Delete" data-confirm="Remove this location point?"><i class="bi bi-trash"></i></button>
                 </form>
               </div>
             </td>
           </tr>
         <% }) %>
         <% if (locationPoints.length === 0) { %>
-          <tr><td colspan="8" class="text-center text-muted py-3">No location points found.</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-3">No location points found.</td></tr>
         <% } %>
       </tbody>
     </table>
@@ -52,3 +58,51 @@
 </div>
 
 <%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<!-- Edit points modal (posts to the existing /adjust route) -->
+<div class="modal fade" id="editPointsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" id="editPointsForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit points <span id="epPlace" class="text-secondary"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Points</label>
+          <input type="number" name="points" id="epPoints" class="form-control" required autofocus>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-gradient">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modalEl = document.getElementById('editPointsModal');
+    var form = document.getElementById('editPointsForm');
+    document.querySelectorAll('.js-edit-points').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        form.action = '/admin/locations/' + btn.dataset.id + '/adjust';
+        document.getElementById('epPoints').value = btn.dataset.points || '';
+        document.getElementById('epPlace').textContent = btn.dataset.place ? '· ' + btn.dataset.place : '';
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    });
+
+    // Placeholder buttons (Add place / time-based multiplier) — show a transient
+    // "coming soon" note instead of navigating, until the backend is built.
+    document.querySelectorAll('.js-coming-soon').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var t = document.createElement('div');
+        t.textContent = '🚧 Coming soon — not wired up yet';
+        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1b1b22;color:#fff;border:1px solid rgba(255,255,255,.14);padding:10px 18px;border-radius:10px;z-index:9999;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.45)';
+        document.body.appendChild(t);
+        setTimeout(function () { t.remove(); }, 2200);
+      });
+    });
+  })();
+</script>

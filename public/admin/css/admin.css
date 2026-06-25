@@ -356,6 +356,9 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
   box-shadow: 0 6px 18px rgba(168, 85, 247, 0.32);
 }
 .btn-gradient:hover { color: #fff; filter: brightness(1.06); }
+/* Warm gradient pill (orange→amber) — e.g. the place time-multiplier CTA */
+.btn-gradient-warm { background: linear-gradient(135deg, #fb6f47, #fbbf24); border: none; color: #fff; font-weight: 600; }
+.btn-gradient-warm:hover { color: #fff; filter: brightness(1.06); }
 
 /* Avatar + name cell in tables. Full-body minimes show whole figure:
    rounded square + object-fit:contain (no cropping). */
