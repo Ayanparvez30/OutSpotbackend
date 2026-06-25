@@ -476,6 +476,18 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
 .status-blocked  { background: #e11d48; color: #fff; }
 .status-pending  { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
 .status-accepted { background: #fb7185; color: #fff; }
+
+/* Friendship filter pills — colours mirror the status pills above:
+   All = brand gradient, Pending = ghost/white, Accepted = coral. Inactive
+   states fall back to a subtle muted outline. */
+.filter-pill {
+  border: 1px solid var(--os-border-2); color: var(--os-muted);
+  background: transparent;
+}
+.filter-pill:hover { color: #fff; border-color: rgba(255, 255, 255, 0.22); }
+.filter-pill.active-all      { background: var(--os-grad); color: #fff; border-color: transparent; }
+.filter-pill.active-pending  { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.45); }
+.filter-pill.active-accepted { background: #fb7185; color: #fff; border-color: transparent; }
 .status-declined { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
 .status-featured { background: rgba(168, 85, 247, 0.18); color: #c084fc; }
 

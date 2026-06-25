@@ -26,9 +26,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div class="d-flex gap-2 align-items-center">
     <span class="text-muted me-1"><%= total %> friendships</span>
-    <a href="/admin/friends" class="btn btn-sm <%= !statusFilter ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
-    <a href="/admin/friends?status=PENDING" class="btn btn-sm <%= statusFilter === 'PENDING' ? 'btn-warning' : 'btn-outline-warning' %>">Pending</a>
-    <a href="/admin/friends?status=ACCEPTED" class="btn btn-sm <%= statusFilter === 'ACCEPTED' ? 'btn-success' : 'btn-outline-success' %>">Accepted</a>
+    <a href="/admin/friends" class="btn btn-sm filter-pill <%= !statusFilter ? 'active-all' : '' %>">All</a>
+    <a href="/admin/friends?status=PENDING" class="btn btn-sm filter-pill <%= statusFilter === 'PENDING' ? 'active-pending' : '' %>">Pending</a>
+    <a href="/admin/friends?status=ACCEPTED" class="btn btn-sm filter-pill <%= statusFilter === 'ACCEPTED' ? 'active-accepted' : '' %>">Accepted</a>
   </div>
   <a href="/admin/friends/blocks" class="btn btn-sm btn-outline-danger"><i class="bi bi-slash-circle me-1"></i>View Blocks</a>
 </div>
