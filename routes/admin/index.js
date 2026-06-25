@@ -8,6 +8,16 @@ router.use('/', require('./authRoutes'));
 // All routes below require admin authentication
 router.use(adminAuth);
 
+// Admin pages render live moderation data — never let the browser serve a
+// stale cached copy. Without this, a ban/unban/points-adjust/edit updates the
+// DB but the post-action redirect can show a cached page, so the change looks
+// like it "didn't apply". (Static assets under /admin/assets are mounted
+// separately and stay cacheable.)
+router.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, must-revalidate');
+  next();
+});
+
 router.use('/dashboard', require('./dashboardRoutes'));
 router.use('/users', require('./userRoutes'));
 router.use('/communities', require('./communityRoutes'));
