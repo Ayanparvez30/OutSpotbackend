@@ -143,6 +143,26 @@ function timeRemainingMs(frequency, zone, now = new Date()) {
   const saturdayEnd = sundayStart.plus({ days: 6 }).endOf('day'); // ✅
   return Math.max(0, saturdayEnd.toMillis() - dt.toMillis());
 }
+// Read-only preview of which challenge is *currently selected* for the given
+// frequency right now — the same deterministic, date-seeded pick the app uses
+// in getAssignedChallenge, minus the per-user notification. Selection is
+// user-independent (seed = frequency:windowKey), so every user sees this same
+// challenge today. Used by the admin panel to show "today's live daily /
+// this week's live weekly". MUST keep the same `orderBy: { id: 'asc' }` as
+// getAssignedChallenge so the seeded index resolves to the identical challenge.
+async function previewActiveChallenge(prisma, frequency, zone, now = new Date()) {
+  const list = await prisma.challenge.findMany({
+    where: { frequency, isActive: true },
+    orderBy: { id: 'asc' },
+  });
+  const ctx = nowContext(zone, now);
+  const eligible = list.filter(c => challengeMatchesNow(c, ctx));
+  if (!eligible.length) return { challenge: null, windowKey: null };
+  const windowKey = frequency === 'DAILY' ? dateKeyInZone(now, zone) : weekKeyInZone(now, zone);
+  const challenge = seededPick(eligible, `${frequency}:${windowKey}`);
+  return { challenge, windowKey };
+}
+
 module.exports = {
   resolveZone,
   startOfDayInZone,
@@ -151,6 +171,7 @@ module.exports = {
   dateKeyInZone,
   weekKeyInZone,
   getAssignedChallenge,
+  previewActiveChallenge,
   timeRemainingMs,
   nowContext,
   challengeMatchesNow,

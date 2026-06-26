@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { pointsForDifficulty } = require('../../utils/challengeDifficulty');
+const { previewActiveChallenge, resolveZone } = require('../../utils/challenges');
 
 exports.listChallenges = async (req, res) => {
   try {
@@ -30,11 +31,22 @@ exports.listChallenges = async (req, res) => {
     if (freq) params.set('frequency', freq);
     const baseUrl = `/admin/challenges${params.toString() ? `?${params}` : ''}`;
 
+    // Which challenge is *live right now* (the app's deterministic date-seeded
+    // pick) for the default app timezone. Independent of the page filter above.
+    const zone = resolveZone();
+    const [liveDaily, liveWeekly] = await Promise.all([
+      previewActiveChallenge(prisma, 'DAILY', zone),
+      previewActiveChallenge(prisma, 'WEEKLY', zone),
+    ]);
+
     res.render('admin/pages/challenges/index', {
       layout: 'admin/layouts/main',
       title: 'Challenges',
       challenges, total, page, totalPages, baseUrl,
       search, frequency: freq || '',
+      liveDaily: liveDaily.challenge,
+      liveWeekly: liveWeekly.challenge,
+      liveZone: zone,
     });
   } catch (error) {
     console.error('List challenges error:', error);
