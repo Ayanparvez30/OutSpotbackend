@@ -123,18 +123,20 @@ html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transpa
   width: 38px;
   height: 38px;
   border-radius: 11px;
-  background: var(--os-grad);
+  /* Dark gradient backdrop so the colourful pin logo stands out. */
+  background: linear-gradient(135deg, #3f0a5e, #1c001f);
   display: grid;
   place-items: center;
   overflow: hidden;
+  padding: 4px;
   color: #fff;
   font-size: 1.15rem;
-  box-shadow: 0 6px 16px rgba(236, 72, 153, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 .sidebar-brand .brand-logo img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .sidebar-brand .brand-name {
