@@ -65,14 +65,27 @@
             </div>
             <div class="row mb-3">
               <div class="col">
-                <label class="form-label">Apple Product ID</label>
+                <label class="form-label" id="appleLabel">Apple Product ID</label>
                 <input type="text" name="appleProductId" class="form-control" value="<%= item && item.appleProductId ? item.appleProductId : '' %>" placeholder="com.outspot.item_123">
               </div>
               <div class="col">
-                <label class="form-label">Google Product ID</label>
+                <label class="form-label" id="googleLabel">Google Product ID</label>
                 <input type="text" name="googleProductId" class="form-control" value="<%= item && item.googleProductId ? item.googleProductId : '' %>" placeholder="com.outspot.item_123">
               </div>
             </div>
+            <% if (!item) { %>
+            <!-- Second set of product IDs, shown only when gender = Both (for the Feminine item). -->
+            <div class="row mb-3" id="productIdRowF" style="display:none">
+              <div class="col">
+                <label class="form-label">Apple Product ID <span class="text-muted">(Feminine)</span></label>
+                <input type="text" name="appleProductIdF" class="form-control" placeholder="com.outspot.item_123_f">
+              </div>
+              <div class="col">
+                <label class="form-label">Google Product ID <span class="text-muted">(Feminine)</span></label>
+                <input type="text" name="googleProductIdF" class="form-control" placeholder="com.outspot.item_123_f">
+              </div>
+            </div>
+            <% } %>
             <div class="mb-3 form-check">
               <input type="checkbox" name="isFeatured" class="form-check-input" id="isFeatured" <%= item && item.isFeatured ? 'checked' : '' %>>
               <label class="form-check-label" for="isFeatured">Featured</label>
@@ -158,8 +171,18 @@
   }
 
   function toggleBothHint() {
+    const isBoth = genderSelect.value === 'both';
     const hint = document.getElementById('bothHint');
-    if (hint) hint.style.display = genderSelect.value === 'both' ? '' : 'none';
+    if (hint) hint.style.display = isBoth ? '' : 'none';
+    // Show the Feminine product-ID row and tag the first row as Masculine.
+    const rowF = document.getElementById('productIdRowF');
+    if (rowF) rowF.style.display = isBoth ? '' : 'none';
+    const appleLabel = document.getElementById('appleLabel');
+    const googleLabel = document.getElementById('googleLabel');
+    if (appleLabel) appleLabel.innerHTML = isBoth
+      ? 'Apple Product ID <span class="text-muted">(Masculine)</span>' : 'Apple Product ID';
+    if (googleLabel) googleLabel.innerHTML = isBoth
+      ? 'Google Product ID <span class="text-muted">(Masculine)</span>' : 'Google Product ID';
   }
 
   genderSelect.addEventListener('change', () => { populateSlots(); toggleBothHint(); });

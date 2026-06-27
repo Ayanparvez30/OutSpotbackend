@@ -61,7 +61,8 @@ exports.createForm = (req, res) => {
 
 exports.createItem = async (req, res) => {
   try {
-    const { slot, name, brand, imageUrl, isFeatured, isFree, gender, appleProductId, googleProductId } = req.body;
+    const { slot, name, brand, imageUrl, isFeatured, isFree, gender,
+            appleProductId, googleProductId, appleProductIdF, googleProductIdF } = req.body;
     const free = isFree === 'on';
 
     // "both" creates one masculine + one feminine item in a single submission.
@@ -84,8 +85,10 @@ exports.createItem = async (req, res) => {
       finalImageUrl = await uploadToS3(req.file, 'shop-items');
     }
 
-    // Upload-once, then create one row per gender. name + product IDs must stay
-    // unique (DB constraints), so when creating both we add an M/F marker.
+    // Upload once, then create one row per gender. For "both", the Feminine row
+    // uses its own product IDs (the *F fields) — each item keeps its real store
+    // SKU, no suffix hacks. The name still gets an M/F tag because of the
+    // @@unique([slot, name]) constraint.
     const ts = Date.now();
     for (const g of genders) {
       const tag = g === 'masculine' ? 'M' : 'F';
@@ -93,6 +96,8 @@ exports.createItem = async (req, res) => {
       const finalName = free
         ? `free-${slot}-${ts}${both ? `-${sfx}` : ''}`
         : (both ? `${name || 'Untitled'} (${tag})` : (name || 'Untitled'));
+      const appleId  = (both && g === 'feminine') ? appleProductIdF  : appleProductId;
+      const googleId = (both && g === 'feminine') ? googleProductIdF : googleProductId;
       await prisma.shopItem.create({
         data: {
           slot,
@@ -101,8 +106,8 @@ exports.createItem = async (req, res) => {
           imageUrl: finalImageUrl,
           isFeatured: free ? false : (isFeatured === 'on'),
           gender: g,
-          appleProductId: free ? null : (appleProductId ? appleProductId + (both ? `_${sfx}` : '') : null),
-          googleProductId: free ? null : (googleProductId ? googleProductId + (both ? `_${sfx}` : '') : null),
+          appleProductId: free ? null : (appleId || null),
+          googleProductId: free ? null : (googleId || null),
         },
       });
     }
