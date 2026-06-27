@@ -239,7 +239,8 @@
     geocoder.geocode({ location: latLng }, (results, status) => {
       if (status !== 'OK' || !results || !results[0]) return;
       const r = results[0];
-      if (!$('msAddress').value) $('msAddress').value = r.formatted_address || '';
+      // Always refresh the address when the pin moves (don't keep a stale one).
+      $('msAddress').value = r.formatted_address || '';
       fillCity(r.address_components);
     });
   }
