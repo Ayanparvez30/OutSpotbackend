@@ -32,6 +32,9 @@ router.get('/map-spots', (req, res) => {
   });
 });
 
+// Spot Suggestions — placeholder for now (coming soon board).
+router.get('/spot-suggestions', comingSoon('Spot Suggestions'));
+
 router.post('/:id/adjust', ctrl.adjustPoints);
 router.post('/:id/delete', ctrl.removePoint);
 
