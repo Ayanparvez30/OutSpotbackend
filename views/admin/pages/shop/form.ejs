@@ -22,7 +22,15 @@
             <select name="gender" class="form-select" required id="genderSelect">
               <option value="masculine" <%= currentGender === 'masculine' ? 'selected' : '' %>>Masculine</option>
               <option value="feminine"  <%= currentGender === 'feminine'  ? 'selected' : '' %>>Feminine</option>
+              <% if (!item) { %>
+              <option value="both">Both (creates one for each)</option>
+              <% } %>
             </select>
+            <% if (!item) { %>
+            <small class="text-muted" id="bothHint" style="display:none">
+              Creates two items at once — one Masculine and one Feminine.
+            </small>
+            <% } %>
           </div>
 
           <div class="mb-3">
@@ -100,6 +108,14 @@
       { value: 'ORNAMENT', label: 'Necklace (ornament)' },
       { value: 'MAKEUP',   label: 'Lipstick (makeup)' },
     ],
+    // "Both" can only use slots that exist for masculine AND feminine.
+    both: [
+      { value: 'TOP',     label: 'Top (shirt)' },
+      { value: 'BOTTOM',  label: 'Bottom (pants)' },
+      { value: 'SHOES',   label: 'Shoes' },
+      { value: 'GLASSES', label: 'Glasses' },
+      { value: 'WATCH',   label: 'Watch' },
+    ],
   };
 
   const genderSelect = document.getElementById('genderSelect');
@@ -141,9 +157,15 @@
     }
   }
 
-  genderSelect.addEventListener('change', () => populateSlots());
+  function toggleBothHint() {
+    const hint = document.getElementById('bothHint');
+    if (hint) hint.style.display = genderSelect.value === 'both' ? '' : 'none';
+  }
+
+  genderSelect.addEventListener('change', () => { populateSlots(); toggleBothHint(); });
   isFreeCheckbox.addEventListener('change', toggleFields);
 
   populateSlots(slotSelect.dataset.current);
   toggleFields();
+  toggleBothHint();
 </script>
