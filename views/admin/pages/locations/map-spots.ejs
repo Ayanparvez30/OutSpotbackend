@@ -1,0 +1,352 @@
+<%
+  // NOTE: front-end / design only. No save API yet — the "Add spot" button
+  // validates and previews; persistence is wired later (DB + endpoint).
+%>
+<style>
+  .ms-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+  .ms-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+  .ms-stat { background:var(--os-surface); border:1px solid var(--os-border); border-radius:16px; padding:18px 20px; }
+  .ms-stat-top { display:flex; align-items:center; gap:8px; color:#9aa1ad; font-size:.74rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .ms-stat-val { font-size:2rem; font-weight:800; margin-top:6px; }
+  .ms-mapcard { background:var(--os-surface); border:1px solid var(--os-border); border-radius:16px; overflow:hidden; margin-bottom:20px; position:relative; }
+  #msMap { width:100%; height:440px; background:#0f1420; }
+  .ms-maptag { position:absolute; right:14px; bottom:12px; font-size:.7rem; letter-spacing:.12em; color:#6b7280; pointer-events:none; }
+  .ms-empty { padding:34px; text-align:center; color:#7a8190; }
+
+  /* Modal */
+  .ms-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); z-index:1050; display:none; align-items:flex-start; justify-content:center; overflow-y:auto; padding:34px 16px; }
+  .ms-overlay.open { display:flex; }
+  .ms-modal { width:100%; max-width:880px; background:#141319; border:1px solid var(--os-border); border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .ms-modal-head { display:flex; justify-content:space-between; align-items:flex-start; padding:20px 24px 12px; }
+  .ms-modal-body { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding:6px 24px 8px; }
+  .ms-modal-foot { display:flex; justify-content:flex-end; gap:10px; padding:16px 24px 22px; align-items:center; }
+  .ms-close { background:none; border:none; color:#9aa1ad; font-size:1.3rem; line-height:1; cursor:pointer; }
+  #msPinMap { width:100%; height:240px; border-radius:12px; background:#0f1420; border:1px solid var(--os-border); }
+  .ms-chip { background:#22202b; border:1px solid var(--os-border); color:#cdd3df; border-radius:9px; padding:7px 12px; font-size:.82rem; font-weight:600; cursor:pointer; transition:all .15s; }
+  .ms-chip:hover { border-color:var(--os-purple); color:#fff; }
+  .ms-chip.active { background:var(--os-grad); border-color:transparent; color:#fff; }
+  .ms-chiprow { display:flex; flex-wrap:wrap; gap:8px; }
+  .ms-coordtag { font-family:monospace; font-size:.74rem; color:#9aa1ad; background:#0f1420; border:1px solid var(--os-border); border-radius:7px; padding:3px 8px; display:inline-block; margin-top:8px; }
+  .ms-invalid { border-color:#f5365c !important; box-shadow:0 0 0 .15rem rgba(245,54,92,.25) !important; }
+  .ms-hint-err { color:#f5365c; font-size:.78rem; margin-top:4px; display:none; }
+  .ms-switch { display:flex; align-items:center; gap:12px; }
+  @media (max-width:760px){ .ms-stats{grid-template-columns:1fr;} .ms-modal-body{grid-template-columns:1fr;} }
+</style>
+
+<div class="ms-head">
+  <div>
+    <h1 class="page-title">Map Spots</h1>
+    <p class="page-subtitle">Add real-world spots and the points users earn for checking in</p>
+  </div>
+  <button type="button" class="btn btn-gradient" id="msAddBtn"><i class="bi bi-plus-lg me-1"></i>Add spot</button>
+</div>
+
+<div class="ms-stats">
+  <div class="ms-stat">
+    <div class="ms-stat-top"><i class="bi bi-geo-alt-fill"></i> Total spots</div>
+    <div class="ms-stat-val">0</div>
+  </div>
+  <div class="ms-stat">
+    <div class="ms-stat-top"><i class="bi bi-broadcast"></i> Active</div>
+    <div class="ms-stat-val">0</div>
+  </div>
+  <div class="ms-stat">
+    <div class="ms-stat-top"><i class="bi bi-coin"></i> Total points pool</div>
+    <div class="ms-stat-val">0</div>
+  </div>
+</div>
+
+<div class="ms-mapcard">
+  <div id="msMap"></div>
+  <span class="ms-maptag">LIVE MAP</span>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>Spot</th><th>City</th><th>Category</th><th>Coords</th><th>Radius</th><th>Points</th><th>Active</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="8" class="ms-empty">No spots yet — click <strong>Add spot</strong> to drop your first pin.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ Add Spot modal ============ -->
+<div class="ms-overlay" id="msModal">
+  <div class="ms-modal">
+    <div class="ms-modal-head">
+      <div>
+        <strong style="font-size:1.15rem">Add spot to the map</strong>
+        <div class="text-muted small">Click the map to drop a pin, or search a place. Set how many points a check-in is worth.</div>
+      </div>
+      <button class="ms-close" id="msClose">&times;</button>
+    </div>
+
+    <div class="ms-modal-body">
+      <!-- left: form -->
+      <div>
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="msName" placeholder="e.g. Brooklyn Bridge">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Address</label>
+          <input type="text" class="form-control" id="msAddress" placeholder="Street, neighborhood">
+        </div>
+        <div class="row mb-3">
+          <div class="col">
+            <label class="form-label">City</label>
+            <input type="text" class="form-control" id="msCity">
+          </div>
+          <div class="col">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="msCategory">
+              <% categories.forEach(c => { %>
+                <option value="<%= c.key %>"><%= c.title %></option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+        <div class="row mb-3">
+          <div class="col">
+            <label class="form-label">Latitude</label>
+            <input type="text" class="form-control" id="msLat" value="40.7128">
+          </div>
+          <div class="col">
+            <label class="form-label">Longitude</label>
+            <input type="text" class="form-control" id="msLng" value="-74.0060">
+          </div>
+        </div>
+
+        <label class="form-label">Jump to city</label>
+        <div class="ms-chiprow mb-3">
+          <button type="button" class="ms-chip ms-city" data-lat="40.7128" data-lng="-74.0060">New York</button>
+          <button type="button" class="ms-chip ms-city" data-lat="34.0522" data-lng="-118.2437">Los Angeles</button>
+          <button type="button" class="ms-chip ms-city" data-lat="41.8781" data-lng="-87.6298">Chicago</button>
+          <button type="button" class="ms-chip ms-city" data-lat="37.7749" data-lng="-122.4194">San Francisco</button>
+          <button type="button" class="ms-chip ms-city" data-lat="25.7617" data-lng="-80.1918">Miami</button>
+        </div>
+
+        <div class="row mb-2">
+          <div class="col">
+            <label class="form-label">Check-in radius (m)</label>
+            <input type="number" class="form-control" id="msRadius" value="50">
+          </div>
+          <div class="col">
+            <label class="form-label">Points</label>
+            <input type="number" class="form-control" id="msPoints" value="100">
+          </div>
+        </div>
+        <div class="ms-chiprow mb-3">
+          <% [50,100,150,250,500].forEach(p => { %>
+            <button type="button" class="ms-chip ms-pt <%= p===100?'active':'' %>" data-pts="<%= p %>">+<%= p %></button>
+          <% }) %>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Description (optional)</label>
+          <textarea class="form-control" id="msDesc" rows="2"></textarea>
+        </div>
+
+        <div class="ms-switch mb-1">
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" id="msActive" checked style="width:2.4em;height:1.3em">
+          </div>
+          <div>
+            <div class="fw-semibold">Active</div>
+            <div class="text-muted small">Visible to users for check-ins</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- right: map + search -->
+      <div>
+        <label class="form-label">Search a place</label>
+        <input type="text" class="form-control mb-1" id="msSearch" placeholder="Search Google Maps…" autocomplete="off">
+        <div class="ms-hint-err" id="msSearchErr">No matching place found — try again.</div>
+
+        <label class="form-label mt-2">Pin location</label>
+        <div id="msPinMap"></div>
+        <div class="ms-coordtag" id="msCoordTag">40.712800, -74.006000</div>
+        <div class="text-muted small mt-2">Click anywhere on the map to drop the pin, or drag it. For exact coordinates, type them in the fields.</div>
+      </div>
+    </div>
+
+    <div class="ms-modal-foot">
+      <span class="text-muted small me-auto"><i class="bi bi-info-circle me-1"></i>Saving connects once the API is wired.</span>
+      <button type="button" class="btn btn-secondary" id="msCancel">Cancel</button>
+      <button type="button" class="btn btn-gradient" id="msSubmit"><i class="bi bi-geo-alt-fill me-1"></i>Add spot</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const MAPS_KEY = '<%= mapsApiKey %>';
+  const DARK_MAP = [
+    { elementType: 'geometry', stylers: [{ color: '#1b2230' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#1b2230' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#8a94a6' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f1626' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2a3142' }] },
+    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#222a3a' }] },
+    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2a3142' }] },
+  ];
+
+  let mainMap, pinMap, pinMarker, geocoder, autocomplete;
+
+  function $(id){ return document.getElementById(id); }
+
+  function loadMaps(cb){
+    if (window.google && window.google.maps) { cb(); return; }
+    if (!MAPS_KEY) { console.warn('No GOOGLE_MAPS_API_KEY set'); return; }
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=places';
+    s.async = true; s.defer = true; s.onload = cb;
+    s.onerror = () => console.error('Google Maps failed to load — check API key / Maps JS API enabled.');
+    document.head.appendChild(s);
+  }
+
+  function initMainMap(){
+    geocoder = new google.maps.Geocoder();
+    mainMap = new google.maps.Map($('msMap'), {
+      center: { lat: 39.5, lng: -98.35 }, zoom: 4,
+      styles: DARK_MAP, disableDefaultUI: true, zoomControl: true,
+    });
+    // existing spots would be plotted here once the API is wired.
+  }
+
+  function updateCoordTag(){
+    const la = parseFloat($('msLat').value), ln = parseFloat($('msLng').value);
+    if (Number.isFinite(la) && Number.isFinite(ln)) $('msCoordTag').textContent = la.toFixed(6) + ', ' + ln.toFixed(6);
+  }
+
+  function setPin(latLng, reverse){
+    if (!pinMarker) return;
+    pinMarker.setPosition(latLng);
+    $('msLat').value = (typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat).toFixed(6);
+    $('msLng').value = (typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng).toFixed(6);
+    updateCoordTag();
+    if (reverse) reverseGeocode(latLng);
+  }
+
+  function reverseGeocode(latLng){
+    geocoder.geocode({ location: latLng }, (results, status) => {
+      if (status !== 'OK' || !results || !results[0]) return;
+      const r = results[0];
+      if (!$('msAddress').value) $('msAddress').value = r.formatted_address || '';
+      fillCity(r.address_components);
+    });
+  }
+
+  function fillCity(components){
+    if (!components) return;
+    const city = components.find(c => c.types.includes('locality'))
+      || components.find(c => c.types.includes('postal_town'))
+      || components.find(c => c.types.includes('administrative_area_level_2'));
+    if (city) $('msCity').value = city.long_name;
+  }
+
+  function ensurePinMap(){
+    if (pinMap){ google.maps.event.trigger(pinMap, 'resize'); return; }
+    const start = { lat: 40.7128, lng: -74.0060 };
+    pinMap = new google.maps.Map($('msPinMap'), {
+      center: start, zoom: 12, styles: DARK_MAP, disableDefaultUI: true, zoomControl: true,
+    });
+    pinMarker = new google.maps.Marker({ map: pinMap, position: start, draggable: true });
+    pinMap.addListener('click', e => setPin(e.latLng, true));
+    pinMarker.addListener('dragend', e => setPin(e.latLng, true));
+
+    autocomplete = new google.maps.places.Autocomplete($('msSearch'), {
+      fields: ['geometry', 'name', 'formatted_address', 'address_components'],
+    });
+    autocomplete.bindTo('bounds', pinMap);
+    autocomplete.addListener('place_changed', () => {
+      const p = autocomplete.getPlace();
+      if (!p || !p.geometry){ markSearchInvalid(true); return; }
+      markSearchInvalid(false);
+      pinMap.panTo(p.geometry.location); pinMap.setZoom(16);
+      setPin(p.geometry.location, false);
+      if (p.name) $('msName').value = p.name;
+      if (p.formatted_address) $('msAddress').value = p.formatted_address;
+      fillCity(p.address_components);
+    });
+  }
+
+  function markSearchInvalid(bad){
+    $('msSearch').classList.toggle('ms-invalid', bad);
+    $('msSearchErr').style.display = bad ? 'block' : 'none';
+  }
+
+  // typing without picking a valid suggestion → show red
+  function bindSearchValidity(){
+    $('msSearch').addEventListener('input', () => markSearchInvalid(false));
+    $('msSearch').addEventListener('blur', () => {
+      const v = $('msSearch').value.trim();
+      if (v && (!autocomplete || !autocomplete.getPlace() || !autocomplete.getPlace().geometry)) {
+        markSearchInvalid(true);
+      }
+    });
+  }
+
+  function openModal(){
+    $('msModal').classList.add('open');
+    loadMaps(() => { if (!mainMap) initMainMap(); ensurePinMap(); setTimeout(() => google.maps.event.trigger(pinMap, 'resize'), 60); });
+  }
+  function closeModal(){ $('msModal').classList.remove('open'); }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // main map loads immediately
+    loadMaps(initMainMap);
+    bindSearchValidity();
+
+    $('msAddBtn').addEventListener('click', openModal);
+    $('msClose').addEventListener('click', closeModal);
+    $('msCancel').addEventListener('click', closeModal);
+    $('msModal').addEventListener('click', e => { if (e.target.id === 'msModal') closeModal(); });
+
+    // lat/lng typed manually → move pin
+    ['msLat','msLng'].forEach(id => $(id).addEventListener('change', () => {
+      const la = parseFloat($('msLat').value), ln = parseFloat($('msLng').value);
+      if (Number.isFinite(la) && Number.isFinite(ln) && pinMap){
+        const ll = { lat: la, lng: ln };
+        pinMap.panTo(ll); setPin(new google.maps.LatLng(la, ln), false);
+      }
+      updateCoordTag();
+    }));
+
+    // jump-to-city chips
+    document.querySelectorAll('.ms-city').forEach(ch => ch.addEventListener('click', () => {
+      const la = parseFloat(ch.dataset.lat), ln = parseFloat(ch.dataset.lng);
+      if (pinMap){ pinMap.panTo({ lat: la, lng: ln }); pinMap.setZoom(12); setPin(new google.maps.LatLng(la, ln), true); }
+    }));
+
+    // points presets
+    document.querySelectorAll('.ms-pt').forEach(ch => ch.addEventListener('click', () => {
+      document.querySelectorAll('.ms-pt').forEach(c => c.classList.remove('active'));
+      ch.classList.add('active');
+      $('msPoints').value = ch.dataset.pts;
+    }));
+
+    // submit (front-end preview only — no API yet)
+    $('msSubmit').addEventListener('click', () => {
+      const name = $('msName').value.trim();
+      const la = parseFloat($('msLat').value), ln = parseFloat($('msLng').value);
+      const cat = $('msCategory').value;
+      let bad = false;
+      if (!name){ $('msName').classList.add('ms-invalid'); bad = true; } else $('msName').classList.remove('ms-invalid');
+      if (!Number.isFinite(la) || !Number.isFinite(ln)){ $('msLat').classList.add('ms-invalid'); $('msLng').classList.add('ms-invalid'); bad = true; }
+      else { $('msLat').classList.remove('ms-invalid'); $('msLng').classList.remove('ms-invalid'); }
+      const validCats = <%- JSON.stringify(categories.map(c => c.key)) %>;
+      if (!validCats.includes(cat)){ $('msCategory').classList.add('ms-invalid'); bad = true; } else $('msCategory').classList.remove('ms-invalid');
+      if (bad) return;
+      alert('Spot ready ✓\n\nName: ' + name + '\nCategory: ' + cat + '\nCoords: ' + la.toFixed(5) + ', ' + ln.toFixed(5) + '\nRadius: ' + $('msRadius').value + 'm · Points: ' + $('msPoints').value + '\n\n(Saving will be enabled once the API is connected.)');
+      closeModal();
+    });
+  });
+</script>

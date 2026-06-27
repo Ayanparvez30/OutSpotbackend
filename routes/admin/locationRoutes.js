@@ -13,7 +13,24 @@ const comingSoon = (feature) => (req, res) =>
     feature,
   });
 router.get('/multipliers', comingSoon('Place Multipliers'));
-router.get('/map-spots', comingSoon('Map Spots'));
+
+// Map Spots — admin UI / design + flow only (no save API or schema yet).
+// Renders a real Google map (GOOGLE_MAPS_API_KEY) and the app's real categories.
+const EXPLORE_CATEGORIES = [
+  { key: 'venue-events', title: 'Venue Events' },
+  { key: 'outdoors', title: 'Outdoors' },
+  { key: 'bars', title: 'Bars' },
+  { key: 'cafes', title: 'Cafes' },
+  { key: 'restaurants', title: 'Restaurants' },
+];
+router.get('/map-spots', (req, res) => {
+  res.render('admin/pages/locations/map-spots', {
+    layout: 'admin/layouts/main',
+    title: 'Map Spots',
+    mapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
+    categories: EXPLORE_CATEGORIES,
+  });
+});
 
 router.post('/:id/adjust', ctrl.adjustPoints);
 router.post('/:id/delete', ctrl.removePoint);
