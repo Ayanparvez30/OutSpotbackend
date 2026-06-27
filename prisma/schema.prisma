@@ -431,7 +431,26 @@ model Challenge {
   // can be shown as a badge in the UI. Nullable so legacy rows don't break.
   difficulty ChallengeDifficulty?
 
+  // Admin date/week overrides that pin this challenge to a window.
+  schedules ChallengeSchedule[]
+
   @@unique([title, frequency]) // <— add this
+}
+
+/// Admin override: pins a specific challenge to a specific day (DAILY) or week
+/// (WEEKLY) window, taking priority over the deterministic seeded auto-pick the
+/// app falls back to. One override per (frequency, window).
+model ChallengeSchedule {
+  id          Int                @id @default(autoincrement())
+  frequency   ChallengeFrequency
+  windowKey   String             // DAILY: "yyyy-LL-dd" date; WEEKLY: week-start (Sunday) "yyyy-LL-dd"
+  challengeId Int
+  challenge   Challenge          @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([frequency, windowKey])
+  @@index([challengeId])
 }
 
 model Submission {

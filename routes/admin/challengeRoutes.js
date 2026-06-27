@@ -13,5 +13,7 @@ router.post('/:id/deactivate', ctrl.deactivateChallenge);
 router.post('/:id/feature', ctrl.toggleFeature);
 router.post('/:id/delete', ctrl.deleteChallenge);
 router.get('/:id/submissions', ctrl.viewSubmissions);
+router.post('/:id/schedule', ctrl.setSchedule);
+router.post('/schedule/:id/clear', ctrl.clearSchedule);
 
 module.exports = router;

@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { pointsForDifficulty } = require('../../utils/challengeDifficulty');
-const { previewActiveChallenge, resolveZone } = require('../../utils/challenges');
+const { previewActiveChallenge, resolveZone, windowKeyForDate } = require('../../utils/challenges');
 
 exports.listChallenges = async (req, res) => {
   try {
@@ -31,27 +31,96 @@ exports.listChallenges = async (req, res) => {
     if (freq) params.set('frequency', freq);
     const baseUrl = `/admin/challenges${params.toString() ? `?${params}` : ''}`;
 
-    // Which challenge is *live right now* (the app's deterministic date-seeded
-    // pick) for the default app timezone. Independent of the page filter above.
+    // Which challenge is *live right now* (admin override → else the app's
+    // deterministic date-seeded pick) for the default app timezone. Independent
+    // of the page filter above.
     const zone = resolveZone();
-    const [liveDaily, liveWeekly] = await Promise.all([
+    const [dailyPick, weeklyPick] = await Promise.all([
       previewActiveChallenge(prisma, 'DAILY', zone),
       previewActiveChallenge(prisma, 'WEEKLY', zone),
     ]);
+    const todayKey = dailyPick.windowKey; // today's date key in the app zone
+
+    // Today-and-future admin overrides (so the admin can review/cancel them).
+    // Guarded so the page still loads if the migration hasn't been run yet.
+    const upcomingSchedules = prisma.challengeSchedule
+      ? await prisma.challengeSchedule.findMany({
+          where: { windowKey: { gte: todayKey } },
+          include: { challenge: { select: { id: true, title: true, frequency: true } } },
+          orderBy: [{ windowKey: 'asc' }, { frequency: 'asc' }],
+          take: 60,
+        })
+      : [];
 
     res.render('admin/pages/challenges/index', {
       layout: 'admin/layouts/main',
       title: 'Challenges',
       challenges, total, page, totalPages, baseUrl,
       search, frequency: freq || '',
-      liveDaily: liveDaily.challenge,
-      liveWeekly: liveWeekly.challenge,
+      liveDaily: dailyPick.challenge,
+      liveWeekly: weeklyPick.challenge,
+      liveDailySource: dailyPick.source,
+      liveWeeklySource: weeklyPick.source,
       liveZone: zone,
+      todayKey,
+      upcomingSchedules,
     });
   } catch (error) {
     console.error('List challenges error:', error);
     req.flash('error', 'Failed to load challenges.');
     res.redirect('/admin/dashboard');
+  }
+};
+
+// Pin a challenge to a specific day/week (admin override). Date comes from the
+// modal as "yyyy-mm-dd"; the window key is derived from the challenge's own
+// frequency (DAILY = that date, WEEKLY = the Sunday week-start containing it).
+exports.setSchedule = async (req, res) => {
+  try {
+    const challengeId = parseInt(req.params.id);
+    const dateStr = (req.body.date || '').trim();
+    const ch = await prisma.challenge.findUnique({ where: { id: challengeId } });
+    if (!ch) {
+      req.flash('error', 'Challenge not found.');
+      return res.redirect('/admin/challenges');
+    }
+    if (!dateStr) {
+      req.flash('error', 'Please pick a date.');
+      return res.redirect('/admin/challenges');
+    }
+    const zone = resolveZone();
+    const windowKey = windowKeyForDate(ch.frequency, dateStr, zone);
+    if (!windowKey) {
+      req.flash('error', 'Invalid date.');
+      return res.redirect('/admin/challenges');
+    }
+    // One override per (frequency, window) — upsert replaces any existing pin.
+    await prisma.challengeSchedule.upsert({
+      where: { frequency_windowKey: { frequency: ch.frequency, windowKey } },
+      update: { challengeId },
+      create: { frequency: ch.frequency, windowKey, challengeId },
+    });
+    const label = ch.frequency === 'DAILY' ? windowKey : `week of ${windowKey}`;
+    req.flash('success', `"${ch.title}" scheduled for ${label}.`);
+    res.redirect('/admin/challenges');
+  } catch (error) {
+    console.error('Set challenge schedule error:', error);
+    req.flash('error', 'Failed to schedule challenge.');
+    res.redirect('/admin/challenges');
+  }
+};
+
+// Remove an override → that window reverts to the automatic seeded pick.
+exports.clearSchedule = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await prisma.challengeSchedule.delete({ where: { id } });
+    req.flash('success', 'Override removed — that window reverts to auto-pick.');
+    res.redirect('/admin/challenges');
+  } catch (error) {
+    console.error('Clear challenge schedule error:', error);
+    req.flash('error', 'Failed to remove override.');
+    res.redirect('/admin/challenges');
   }
 };
 

@@ -90,24 +90,56 @@ async function maybeNotify(prisma, userId, assign, freq, zone) {
     );
   }
 }
-async function getAssignedChallenge(prisma, userId, frequency, zone, now = new Date()) {
+// Resolve which challenge is live for the current window. An admin schedule
+// override (ChallengeSchedule) wins; otherwise fall back to the deterministic
+// date-seeded pick from the eligible active pool. Pure/read-only — no notify.
+// Returns { challenge, windowKey, source: 'scheduled' | 'auto' | 'none' }.
+async function pickForWindow(prisma, frequency, zone, now = new Date()) {
+  const windowKey = frequency === 'DAILY' ? dateKeyInZone(now, zone) : weekKeyInZone(now, zone);
+
+  // 1) Admin override pinned to this exact window?
+  // Guard: if the Prisma client predates the ChallengeSchedule model (migration
+  // not yet run / client not regenerated after a deploy), skip overrides and
+  // fall through to the auto-pick instead of crashing the challenge endpoint.
+  if (prisma.challengeSchedule) {
+    const sched = await prisma.challengeSchedule.findUnique({
+      where: { frequency_windowKey: { frequency, windowKey } },
+      include: { challenge: true },
+    });
+    if (sched && sched.challenge) {
+      return { challenge: sched.challenge, windowKey, source: 'scheduled' };
+    }
+  }
+
+  // 2) Deterministic seeded pick. Scheduling constraints (weekend-only,
+  //    seasonal) are applied BEFORE the pick so an invalid challenge is never
+  //    surfaced.
   const list = await prisma.challenge.findMany({
     where: { frequency, isActive: true },
     orderBy: { id: 'asc' },
   });
-  // Apply scheduling constraints (weekend-only, seasonal) BEFORE seeded pick
-  // so the user never gets shown a challenge that isn't valid today.
   const ctx = nowContext(zone, now);
   const eligible = list.filter(c => challengeMatchesNow(c, ctx));
-  if (!eligible.length) return { challenge: null, windowKey: null };
-  const windowKey = frequency === 'DAILY' ? dateKeyInZone(now, zone) : weekKeyInZone(now, zone);
-  const seed = `${frequency}:${windowKey}`;
-  const challenge = seededPick(eligible, seed);
+  if (!eligible.length) return { challenge: null, windowKey, source: 'none' };
+  const challenge = seededPick(eligible, `${frequency}:${windowKey}`);
+  return { challenge, windowKey, source: 'auto' };
+}
 
+async function getAssignedChallenge(prisma, userId, frequency, zone, now = new Date()) {
+  const picked = await pickForWindow(prisma, frequency, zone, now);
+  if (!picked.challenge) return { challenge: null, windowKey: picked.windowKey };
   // Create notifications for assigned challenges if not already present
-  await maybeNotify(prisma, userId, { challenge }, frequency, zone);
+  await maybeNotify(prisma, userId, { challenge: picked.challenge }, frequency, zone);
+  return { challenge: picked.challenge, windowKey: picked.windowKey };
+}
 
-  return { challenge, windowKey };
+// Window key for an explicit "yyyy-LL-dd" date string (used by admin
+// scheduling). DAILY → that date; WEEKLY → the Sunday week-start containing it.
+function windowKeyForDate(frequency, dateStr, zone) {
+  const dt = DateTime.fromISO(dateStr, { zone });
+  if (!dt.isValid) return null;
+  if (frequency === 'DAILY') return dt.toFormat('yyyy-LL-dd');
+  return dt.minus({ days: dt.weekday % 7 }).startOf('day').toFormat('yyyy-LL-dd');
 }
 // Current weekday + season in the app timezone — used to filter out
 // challenges whose scheduling constraint doesn't match today.
@@ -151,16 +183,7 @@ function timeRemainingMs(frequency, zone, now = new Date()) {
 // this week's live weekly". MUST keep the same `orderBy: { id: 'asc' }` as
 // getAssignedChallenge so the seeded index resolves to the identical challenge.
 async function previewActiveChallenge(prisma, frequency, zone, now = new Date()) {
-  const list = await prisma.challenge.findMany({
-    where: { frequency, isActive: true },
-    orderBy: { id: 'asc' },
-  });
-  const ctx = nowContext(zone, now);
-  const eligible = list.filter(c => challengeMatchesNow(c, ctx));
-  if (!eligible.length) return { challenge: null, windowKey: null };
-  const windowKey = frequency === 'DAILY' ? dateKeyInZone(now, zone) : weekKeyInZone(now, zone);
-  const challenge = seededPick(eligible, `${frequency}:${windowKey}`);
-  return { challenge, windowKey };
+  return pickForWindow(prisma, frequency, zone, now);
 }
 
 module.exports = {
@@ -172,6 +195,8 @@ module.exports = {
   weekKeyInZone,
   getAssignedChallenge,
   previewActiveChallenge,
+  pickForWindow,
+  windowKeyForDate,
   timeRemainingMs,
   nowContext,
   challengeMatchesNow,
