@@ -226,7 +226,7 @@
     { featureType:'road', elementType:'geometry', stylers:[{color:'#2a3142'}] },
     { featureType:'poi', elementType:'labels', stylers:[{visibility:'off'}] },
   ];
-  let pinMap, pinMarker, currentSug = null;
+  let pinMap, pinMarker, geocoder, currentSug = null;
   function $(id){ return document.getElementById(id); }
 
   function loadMaps(cb){
@@ -273,6 +273,7 @@
 
   function initPinMap(lat, lng){
     const start = { lat: Number(lat), lng: Number(lng) };
+    if (!geocoder) geocoder = new google.maps.Geocoder();
     if (!pinMap){
       pinMap = new google.maps.Map($('ssPinMap'), { center:start, zoom:14, styles:DARK_MAP, disableDefaultUI:true, zoomControl:true });
       pinMarker = new google.maps.Marker({ map:pinMap, position:start, draggable:true });
@@ -289,6 +290,20 @@
     const la = latLng.lat(), ln = latLng.lng();
     $('scLat').value = la.toFixed(6); $('scLng').value = ln.toFixed(6);
     $('scCoordTag').textContent = la.toFixed(6) + ', ' + ln.toFixed(6);
+    reverseGeocode(latLng); // refresh Address + City to match the new pin
+  }
+  function reverseGeocode(latLng){
+    if (!geocoder) return;
+    geocoder.geocode({ location: latLng }, (results, status) => {
+      if (status !== 'OK' || !results || !results[0]) return;
+      const r = results[0];
+      $('scAddress').value = r.formatted_address || '';
+      const comp = r.address_components || [];
+      const city = comp.find(c => c.types.includes('locality'))
+        || comp.find(c => c.types.includes('postal_town'))
+        || comp.find(c => c.types.includes('administrative_area_level_2'));
+      if (city) $('scCity').value = city.long_name;
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -316,7 +331,7 @@
     }));
     ['scLat','scLng'].forEach(id => $(id).addEventListener('change', () => {
       const la = parseFloat($('scLat').value), ln = parseFloat($('scLng').value);
-      if (Number.isFinite(la) && Number.isFinite(ln) && pinMap){ const ll={lat:la,lng:ln}; pinMap.setCenter(ll); pinMarker.setPosition(ll); $('scCoordTag').textContent = la.toFixed(6)+', '+ln.toFixed(6); }
+      if (Number.isFinite(la) && Number.isFinite(ln) && pinMap){ const ll={lat:la,lng:ln}; pinMap.setCenter(ll); pinMarker.setPosition(ll); $('scCoordTag').textContent = la.toFixed(6)+', '+ln.toFixed(6); reverseGeocode(new google.maps.LatLng(la, ln)); }
     }));
     $('scPublish').addEventListener('click', () => {
       const name = $('scName').value.trim();
