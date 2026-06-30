@@ -11,10 +11,11 @@
 </div>
 
 <p class="text-muted small mb-3">
-  Places where the user stayed <strong>≥5&nbsp;min</strong> in the last <%= days %> day(s),
-  inferred from <%= totalPings %> location ping(s); <%= sessions.length %> stay(s),
+  <strong>Dwell stays</strong> — places where the user stayed <strong>≥5&nbsp;min</strong> in the last
+  <%= days %> day(s), inferred from <%= totalPings %> location ping(s); <%= sessions.length %> stay(s),
   <%= Math.floor(totalMinutes / 60) %>h <%= totalMinutes % 60 %>m total.
-  <em>Location is only recorded while the app is open, so this is best-effort and may be incomplete.</em>
+  <em>The trail is only recorded while the Map screen is open, so it's often sparse. The
+  <strong>check-ins below</strong> are the reliable record of places visited.</em>
 </p>
 
 <div class="card">
@@ -54,6 +55,50 @@
         <% }) %>
         <% if (sessions.length === 0) { %>
           <tr><td colspan="6" class="text-center text-muted py-3">No dwell sessions in this window.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h6 class="mt-4 mb-2">Check-ins <span class="text-muted fw-normal">(places visited for points — recorded even with the map closed)</span></h6>
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Place</th>
+          <th>Type</th>
+          <th>When</th>
+          <th>Points</th>
+          <th>Map</th>
+          <th>Photo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% checkins.forEach(c => { %>
+          <tr>
+            <td><%= c.placeName || '—' %></td>
+            <td><%= c.placeType || '—' %></td>
+            <td><%= c.createdAt.toLocaleString() %></td>
+            <td><%= c.points %></td>
+            <td>
+              <% if (c.latitude != null && c.longitude != null) { %>
+                <a href="https://www.google.com/maps?q=<%= c.latitude %>,<%= c.longitude %>"
+                   target="_blank" rel="noopener" title="<%= c.latitude.toFixed(5) %>, <%= c.longitude.toFixed(5) %>">
+                  <i class="bi bi-geo-alt"></i> view
+                </a>
+              <% } else { %>—<% } %>
+            </td>
+            <td>
+              <% if (c.mediaUrl) { %>
+                <a href="<%= c.mediaUrl %>" target="_blank" rel="noopener"><i class="bi bi-image"></i> open</a>
+              <% } else { %>—<% } %>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (checkins.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No check-ins in this window.</td></tr>
         <% } %>
       </tbody>
     </table>

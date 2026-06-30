@@ -443,12 +443,17 @@ exports.viewLocationHistory = async (req, res) => {
     const { computeDwellSessions, haversineMeters } = require('../../utils/dwellTime');
     const sessions = computeDwellSessions(history, { radiusM: 150, minMinutes: 5 });
 
-    // Named check-ins in the same window — used to label a dwell cluster with a
-    // real place name when one happened near it.
+    // Check-ins (photo-for-points submissions) in the same window. These are a
+    // MORE RELIABLE "where the user went" signal than the map-only dwell trail —
+    // they're recorded whenever the user submits at a place, even with the map
+    // closed. Shown as their own list; also used to name nearby dwell clusters.
     const checkins = await prisma.locationPoint.findMany({
-      where: { userId, createdAt: { gte: since }, latitude: { not: null }, longitude: { not: null } },
+      where: { userId, createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
-      select: { placeName: true, latitude: true, longitude: true },
+      select: {
+        id: true, placeName: true, placeType: true, points: true,
+        latitude: true, longitude: true, mediaUrl: true, createdAt: true,
+      },
     });
 
     // Newest sessions first for display.
@@ -460,6 +465,7 @@ exports.viewLocationHistory = async (req, res) => {
       const { cityFromLatLng } = require('../../utils/reverseGeocode');
       await Promise.all(sessions.map(async (s) => {
         const near = checkins.find((c) =>
+          c.latitude != null && c.longitude != null &&
           haversineMeters(s.latitude, s.longitude, c.latitude, c.longitude) <= 200);
         if (near && near.placeName) s.placeName = near.placeName;
         s.cityName = await cityFromLatLng(s.latitude, s.longitude);
@@ -473,7 +479,7 @@ exports.viewLocationHistory = async (req, res) => {
     res.render('admin/pages/users/location-history', {
       layout: 'admin/layouts/main',
       title: `Location: ${user.username}`,
-      user, sessions, days, totalPings: history.length, totalMinutes,
+      user, sessions, checkins, days, totalPings: history.length, totalMinutes,
     });
   } catch (error) {
     console.error('Location history error:', error);
