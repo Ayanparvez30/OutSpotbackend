@@ -1,0 +1,61 @@
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h5 class="mb-0">Location history for <a href="/admin/users/<%= user.id %>"><%= user.username %></a></h5>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
+    <% [1, 7, 30].forEach(d => { %>
+      <a href="/admin/users/<%= user.id %>/location-history?days=<%= d %>"
+         class="btn btn-outline-secondary <%= days === d ? 'active' : '' %>">
+        <%= d === 1 ? '24h' : d + 'd' %>
+      </a>
+    <% }) %>
+  </div>
+</div>
+
+<p class="text-muted small mb-3">
+  Places where the user stayed <strong>≥5&nbsp;min</strong> in the last <%= days %> day(s),
+  inferred from <%= totalPings %> location ping(s); <%= sessions.length %> stay(s),
+  <%= Math.floor(totalMinutes / 60) %>h <%= totalMinutes % 60 %>m total.
+  <em>Location is only recorded while the app is open, so this is best-effort and may be incomplete.</em>
+</p>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Place / Area</th>
+          <th>Arrived</th>
+          <th>Left</th>
+          <th>Duration</th>
+          <th>Pings</th>
+          <th>Map</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% const fmtDur = (m) => m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; %>
+        <% sessions.forEach(s => { %>
+          <tr>
+            <td>
+              <%= s.placeName || s.cityName || '—' %>
+              <% if (s.placeName && s.cityName) { %>
+                <span class="text-muted small d-block"><%= s.cityName %></span>
+              <% } %>
+            </td>
+            <td><%= s.arrivedAt.toLocaleString() %></td>
+            <td><%= s.leftAt.toLocaleString() %></td>
+            <td><strong><%= fmtDur(s.dwellMinutes) %></strong></td>
+            <td><%= s.pings %></td>
+            <td>
+              <a href="https://www.google.com/maps?q=<%= s.latitude %>,<%= s.longitude %>"
+                 target="_blank" rel="noopener" title="<%= s.latitude.toFixed(5) %>, <%= s.longitude.toFixed(5) %>">
+                <i class="bi bi-geo-alt"></i> view
+              </a>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (sessions.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No dwell sessions in this window.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
