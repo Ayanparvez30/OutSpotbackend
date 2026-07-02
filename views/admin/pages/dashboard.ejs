@@ -6,7 +6,7 @@
 <!-- Stat cards -->
 <div class="row g-3 mb-4">
   <div class="col-md-3 col-sm-6">
-    <div class="stat-card">
+    <a href="/admin/users" class="stat-card">
       <div class="stat-top">
         <span class="stat-icon"><i class="bi bi-people"></i></span>
         <% if (metrics.usersTrend) { %>
@@ -18,19 +18,19 @@
       </div>
       <div class="stat-value"><%= (metrics.newUsersWeek || 0).toLocaleString() %></div>
       <div class="stat-label">New Users (7d)</div>
-    </div>
+    </a>
   </div>
   <div class="col-md-3 col-sm-6">
-    <div class="stat-card">
+    <a href="/admin/challenges" class="stat-card">
       <div class="stat-top">
         <span class="stat-icon"><i class="bi bi-trophy"></i></span>
       </div>
       <div class="stat-value"><%= metrics.activeChallenges || 0 %></div>
       <div class="stat-label">Active Challenges</div>
-    </div>
+    </a>
   </div>
   <div class="col-md-3 col-sm-6">
-    <div class="stat-card">
+    <a href="/admin/points/purchases" class="stat-card">
       <div class="stat-top">
         <span class="stat-icon"><i class="bi bi-bag-check"></i></span>
         <% if (metrics.purchasesTrend) { %>
@@ -42,16 +42,16 @@
       </div>
       <div class="stat-value"><%= (metrics.totalPurchases || 0).toLocaleString() %></div>
       <div class="stat-label">Purchases (30d)</div>
-    </div>
+    </a>
   </div>
   <div class="col-md-3 col-sm-6">
-    <div class="stat-card">
+    <a href="/admin/reports" class="stat-card">
       <div class="stat-top">
         <span class="stat-icon"><i class="bi bi-flag"></i></span>
       </div>
       <div class="stat-value"><%= metrics.pendingReports || 0 %></div>
       <div class="stat-label">Open Reports</div>
-    </div>
+    </a>
   </div>
 </div>
 

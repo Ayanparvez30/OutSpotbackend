@@ -17,5 +17,6 @@ router.post('/:id/grant-item', ctrl.grantItem);
 router.post('/:id/remove-item', ctrl.removeItem);
 router.get('/:id/inventory', ctrl.viewInventory);
 router.get('/:id/points', ctrl.viewPointsLedger);
+router.get('/:id/location-history', ctrl.viewLocationHistory);
 
 module.exports = router;

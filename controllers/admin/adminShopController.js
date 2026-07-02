@@ -61,16 +61,23 @@ exports.createForm = (req, res) => {
 
 exports.createItem = async (req, res) => {
   try {
-    const { slot, name, brand, imageUrl, isFeatured, isFree, gender, appleProductId, googleProductId } = req.body;
+    const { slot, name, brand, imageUrl, isFeatured, isFree, gender,
+            appleProductId, googleProductId, appleProductIdF, googleProductIdF } = req.body;
     const free = isFree === 'on';
 
-    if (!gender || !GENDER_SLOTS[gender]) {
-      req.flash('error', 'Gender must be masculine or feminine.');
-      return res.redirect('/admin/shop/create');
-    }
-    if (!GENDER_SLOTS[gender].includes(slot)) {
-      req.flash('error', `Slot ${slot} is not allowed for ${gender}.`);
-      return res.redirect('/admin/shop/create');
+    // "both" creates one masculine + one feminine item in a single submission.
+    const genders = gender === 'both' ? ['masculine', 'feminine'] : [gender];
+    const both = genders.length > 1;
+
+    for (const g of genders) {
+      if (!g || !GENDER_SLOTS[g]) {
+        req.flash('error', 'Gender must be masculine, feminine, or both.');
+        return res.redirect('/admin/shop/create');
+      }
+      if (!GENDER_SLOTS[g].includes(slot)) {
+        req.flash('error', `Slot ${slot} is not allowed for ${g}.`);
+        return res.redirect('/admin/shop/create');
+      }
     }
 
     let finalImageUrl = imageUrl || '';
@@ -78,23 +85,33 @@ exports.createItem = async (req, res) => {
       finalImageUrl = await uploadToS3(req.file, 'shop-items');
     }
 
-    const finalName = free
-      ? `free-${slot}-${Date.now()}`
-      : (name || 'Untitled');
-
-    await prisma.shopItem.create({
-      data: {
-        slot,
-        name: finalName,
-        brand: free ? null : (brand || null),
-        imageUrl: finalImageUrl,
-        isFeatured: free ? false : (isFeatured === 'on'),
-        gender,
-        appleProductId: free ? null : (appleProductId || null),
-        googleProductId: free ? null : (googleProductId || null),
-      },
-    });
-    req.flash('success', free ? 'Free item created.' : 'Shop item created.');
+    // Upload once, then create one row per gender. For "both", the Feminine row
+    // uses its own product IDs (the *F fields) — each item keeps its real store
+    // SKU, no suffix hacks. The name still gets an M/F tag because of the
+    // @@unique([slot, name]) constraint.
+    const ts = Date.now();
+    for (const g of genders) {
+      const tag = g === 'masculine' ? 'M' : 'F';
+      const sfx = g === 'masculine' ? 'm' : 'f';
+      const finalName = free
+        ? `free-${slot}-${ts}${both ? `-${sfx}` : ''}`
+        : (both ? `${name || 'Untitled'} (${tag})` : (name || 'Untitled'));
+      const appleId  = (both && g === 'feminine') ? appleProductIdF  : appleProductId;
+      const googleId = (both && g === 'feminine') ? googleProductIdF : googleProductId;
+      await prisma.shopItem.create({
+        data: {
+          slot,
+          name: finalName,
+          brand: free ? null : (brand || null),
+          imageUrl: finalImageUrl,
+          isFeatured: free ? false : (isFeatured === 'on'),
+          gender: g,
+          appleProductId: free ? null : (appleId || null),
+          googleProductId: free ? null : (googleId || null),
+        },
+      });
+    }
+    req.flash('success', both ? 'Created 2 items (Masculine + Feminine).' : (free ? 'Free item created.' : 'Shop item created.'));
     res.redirect('/admin/shop');
   } catch (error) {
     console.error('Create shop item error:', error);

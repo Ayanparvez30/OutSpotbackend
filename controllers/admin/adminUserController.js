@@ -416,6 +416,78 @@ exports.viewPointsLedger = async (req, res) => {
   }
 };
 
+// Per-user location history → "where did this user spend time" inferred from
+// the raw LocationHistory trail. READ-ONLY: no schema change, no new table.
+exports.viewLocationHistory = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const days = Math.min(Math.max(parseInt(req.query.days) || 7, 1), 90);
+    const since = new Date(Date.now() - days * 86400000);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, Location: true },
+    });
+    if (!user) {
+      req.flash('error', 'User not found.');
+      return res.redirect('/admin/users');
+    }
+
+    // Raw movement trail, oldest → newest so sessions build chronologically.
+    const history = await prisma.locationHistory.findMany({
+      where: { userId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: { latitude: true, longitude: true, createdAt: true },
+    });
+
+    const { computeDwellSessions, haversineMeters } = require('../../utils/dwellTime');
+    const sessions = computeDwellSessions(history, { radiusM: 150, minMinutes: 5 });
+
+    // Check-ins (photo-for-points submissions) in the same window. These are a
+    // MORE RELIABLE "where the user went" signal than the map-only dwell trail —
+    // they're recorded whenever the user submits at a place, even with the map
+    // closed. Shown as their own list; also used to name nearby dwell clusters.
+    const checkins = await prisma.locationPoint.findMany({
+      where: { userId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, placeName: true, placeType: true, points: true,
+        latitude: true, longitude: true, mediaUrl: true, createdAt: true,
+      },
+    });
+
+    // Newest sessions first for display.
+    sessions.reverse();
+
+    // Best-effort labels (cached, never throws). Prefer a nearby check-in's
+    // placeName; always resolve the centroid to a city for context.
+    try {
+      const { cityFromLatLng } = require('../../utils/reverseGeocode');
+      await Promise.all(sessions.map(async (s) => {
+        const near = checkins.find((c) =>
+          c.latitude != null && c.longitude != null &&
+          haversineMeters(s.latitude, s.longitude, c.latitude, c.longitude) <= 200);
+        if (near && near.placeName) s.placeName = near.placeName;
+        s.cityName = await cityFromLatLng(s.latitude, s.longitude);
+      }));
+    } catch (geoErr) {
+      console.error('location-history geo error', geoErr.message);
+    }
+
+    const totalMinutes = sessions.reduce((sum, s) => sum + s.dwellMinutes, 0);
+
+    res.render('admin/pages/users/location-history', {
+      layout: 'admin/layouts/main',
+      title: `Location: ${user.username}`,
+      user, sessions, checkins, days, totalPings: history.length, totalMinutes,
+    });
+  } catch (error) {
+    console.error('Location history error:', error);
+    req.flash('error', 'Failed to load location history.');
+    res.redirect(`/admin/users/${req.params.id}`);
+  }
+};
+
 exports.exportCsv = async (req, res) => {
   try {
     const { Parser } = require('json2csv');

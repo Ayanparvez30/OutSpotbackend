@@ -1,0 +1,367 @@
+<%
+  // FRONT-END / DESIGN ONLY — mock data, no save API yet. Wire frontend +
+  // backend later. All actions (status change, publish, dismiss) are client-side.
+  function cnt(st){ return suggestions.filter(s => s.status === st).length; }
+%>
+<style>
+  .ss-head { margin-bottom: 20px; }
+  .ss-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
+  .ss-stat { background:var(--os-surface); border:1px solid var(--os-border); border-radius:16px; padding:16px 18px; cursor:pointer; transition:border-color .15s, transform .15s; }
+  .ss-stat:hover { transform:translateY(-2px); }
+  .ss-stat.active { border-color:var(--os-purple); box-shadow:0 0 0 1px var(--os-purple); }
+  .ss-stat-top { display:flex; align-items:center; gap:8px; color:#9aa1ad; font-size:.72rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .ss-stat-val { font-size:1.9rem; font-weight:800; margin-top:6px; }
+
+  .ss-rep { display:flex; align-items:center; gap:10px; }
+  .ss-av { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:700; font-size:.78rem; flex-shrink:0; }
+  .ss-type { display:inline-block; background:linear-gradient(135deg,#f5365c,#fb6f47); color:#fff; font-size:.72rem; font-weight:700; padding:4px 11px; border-radius:999px; }
+  .ss-snaps { display:flex; gap:5px; }
+  .ss-snap { width:30px; height:30px; border-radius:7px; background:linear-gradient(135deg,#3f0a5e,#7b51f3); display:grid; place-items:center; font-size:.85rem; }
+  .ss-badge { font-size:.7rem; font-weight:800; letter-spacing:.04em; padding:4px 10px; border-radius:7px; text-transform:uppercase; }
+  .ss-badge.new       { background:rgba(245,200,66,.16); color:#f5c842; }
+  .ss-badge.reviewing { background:rgba(168,85,247,.18); color:#c084fc; }
+  .ss-badge.approved  { background:rgba(34,197,94,.16); color:#4ade80; }
+  .ss-badge.rejected  { background:rgba(245,54,92,.16); color:#fb6f87; }
+  .ss-actions { display:flex; gap:8px; justify-content:flex-end; align-items:center; }
+  .ss-view { background:#22202b; border:1px solid var(--os-border); color:#cdd3df; border-radius:9px; padding:7px 12px; font-size:.82rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .ss-view:hover { border-color:var(--os-purple); color:#fff; }
+  .ss-x { background:none; border:none; color:#7a8190; font-size:1.1rem; cursor:pointer; line-height:1; padding:4px 6px; }
+  .ss-x:hover { color:#fb6f87; }
+
+  /* Modal (shared) */
+  .ss-overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(3px); z-index:1050; display:none; align-items:flex-start; justify-content:center; overflow-y:auto; padding:34px 16px; }
+  .ss-overlay.open { display:flex; }
+  .ss-modal { width:100%; background:#141319; border:1px solid var(--os-border); border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+  .ss-modal.sm { max-width:520px; }
+  .ss-modal.lg { max-width:900px; }
+  .ss-mhead { display:flex; justify-content:space-between; align-items:flex-start; padding:20px 24px 10px; }
+  .ss-close { background:none; border:none; color:#9aa1ad; font-size:1.3rem; cursor:pointer; line-height:1; }
+  .ss-section-label { font-size:.7rem; font-weight:700; letter-spacing:.07em; color:#8b909c; text-transform:uppercase; margin:14px 0 4px; }
+  .ss-mfoot { display:flex; justify-content:flex-end; gap:10px; padding:16px 24px 22px; align-items:center; flex-wrap:wrap; }
+  .btn-reject { background:linear-gradient(135deg,#f5365c,#e0457b); border:none; color:#fff; border-radius:10px; padding:9px 16px; font-weight:700; cursor:pointer; display:inline-flex; gap:6px; align-items:center; }
+  .btn-soft { background:#22202b; border:1px solid var(--os-border); color:#cdd3df; border-radius:10px; padding:9px 16px; font-weight:600; cursor:pointer; }
+
+  /* Create modal layout */
+  .ss-cbody { display:grid; grid-template-columns:1fr 1fr; gap:24px; padding:6px 24px 8px; }
+  #ssPinMap { width:100%; height:240px; border-radius:12px; background:#0f1420; border:1px solid var(--os-border); }
+  .ss-coordtag { font-family:monospace; font-size:.74rem; color:#9aa1ad; background:#0f1420; border:1px solid var(--os-border); border-radius:7px; padding:3px 8px; display:inline-block; margin-top:8px; }
+  .ss-chip { background:#22202b; border:1px solid var(--os-border); color:#cdd3df; border-radius:9px; padding:7px 12px; font-size:.82rem; font-weight:600; cursor:pointer; }
+  .ss-chip.active { background:var(--os-grad); border-color:transparent; color:#fff; }
+  .ss-chiprow { display:flex; flex-wrap:wrap; gap:8px; }
+  .ss-invalid { border-color:#f5365c !important; box-shadow:0 0 0 .15rem rgba(245,54,92,.25) !important; }
+  @media (max-width:760px){ .ss-stats{grid-template-columns:repeat(2,1fr);} .ss-cbody{grid-template-columns:1fr;} }
+</style>
+
+<div class="ss-head">
+  <h1 class="page-title">Spot Suggestions</h1>
+  <p class="page-subtitle">Snaps from users letting us know about places &amp; events the app hasn't recognised yet</p>
+</div>
+
+<div class="ss-stats">
+  <div class="ss-stat active" data-filter="all">
+    <div class="ss-stat-top"><i class="bi bi-inbox"></i> Total</div>
+    <div class="ss-stat-val"><%= suggestions.length %></div>
+  </div>
+  <div class="ss-stat" data-filter="new">
+    <div class="ss-stat-top"><i class="bi bi-bell"></i> New</div>
+    <div class="ss-stat-val"><%= cnt('new') %></div>
+  </div>
+  <div class="ss-stat" data-filter="reviewing">
+    <div class="ss-stat-top"><i class="bi bi-eye"></i> Reviewing</div>
+    <div class="ss-stat-val"><%= cnt('reviewing') %></div>
+  </div>
+  <div class="ss-stat" data-filter="approved">
+    <div class="ss-stat-top"><i class="bi bi-check-circle"></i> Approved</div>
+    <div class="ss-stat-val"><%= cnt('approved') %></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>Reporter</th><th>Proposed spot</th><th>Type</th><th>Snaps</th><th>Submitted</th><th>Status</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <% suggestions.forEach(s => { %>
+          <tr data-status="<%= s.status %>" data-id="<%= s.id %>">
+            <td>
+              <div class="ss-rep">
+                <span class="ss-av" style="background:<%= s.color %>"><%= s.initials %></span>
+                <span class="fw-semibold">@<%= s.user %></span>
+              </div>
+            </td>
+            <td>
+              <div class="fw-semibold"><%= s.name %></div>
+              <div class="text-muted small"><%= s.address %></div>
+            </td>
+            <td><span class="ss-type"><%= s.type %></span></td>
+            <td>
+              <% if (s.snaps > 0) { %>
+                <div class="ss-snaps">
+                  <% for (let i=0;i<Math.min(s.snaps,3);i++){ %><span class="ss-snap"><i class="bi bi-image" style="font-size:.8rem;color:#cdb6ff"></i></span><% } %>
+                </div>
+              <% } else { %><span class="text-muted">—</span><% } %>
+            </td>
+            <td class="text-muted small"><%= s.submitted %></td>
+            <td><span class="ss-badge <%= s.status %>"><%= s.status %></span></td>
+            <td>
+              <div class="ss-actions">
+                <button class="ss-view js-view" data-sug='<%- JSON.stringify(s) %>'><i class="bi bi-eye"></i>View</button>
+                <button class="btn btn-gradient btn-sm js-create" data-sug='<%- JSON.stringify(s) %>'><i class="bi bi-stars me-1"></i>Create spot</button>
+                <button class="ss-x js-dismiss" title="Dismiss">&times;</button>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== View modal ===== -->
+<div class="ss-overlay" id="ssView">
+  <div class="ss-modal sm">
+    <div class="ss-mhead">
+      <div>
+        <strong id="svName" style="font-size:1.2rem"></strong>
+        <div class="text-muted small">Suggested by <span id="svBy"></span></div>
+      </div>
+      <button class="ss-close js-vclose">&times;</button>
+    </div>
+    <div style="padding:4px 24px 8px">
+      <div class="mb-2"><span class="ss-type" id="svType"></span> <span class="ss-badge" id="svStatus"></span></div>
+      <div class="ss-section-label">Location</div>
+      <div id="svAddr"></div>
+      <div class="ss-coordtag" id="svCoords"></div>
+      <div class="ss-section-label">Note</div>
+      <div id="svNote" class="text-muted"></div>
+      <div class="ss-section-label">Snaps</div>
+      <div class="ss-snaps" id="svSnaps" style="margin-bottom:6px"></div>
+    </div>
+    <div class="ss-mfoot">
+      <button class="btn-soft js-mark-review"><i class="bi bi-eye me-1"></i>Mark reviewing</button>
+      <button class="btn-reject js-reject"><i class="bi bi-x-lg"></i>Reject</button>
+      <button class="btn btn-gradient js-create-from-view"><i class="bi bi-stars me-1"></i>Create spot</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Create spot profile modal ===== -->
+<div class="ss-overlay" id="ssCreate">
+  <div class="ss-modal lg">
+    <div class="ss-mhead">
+      <div>
+        <strong style="font-size:1.2rem">Create spot profile</strong>
+        <div class="text-muted small">Review the suggestion, drop a pin, set the points, and publish the spot to the live map.</div>
+      </div>
+      <button class="ss-close js-cclose">&times;</button>
+    </div>
+    <div class="ss-cbody">
+      <div>
+        <div class="mb-3">
+          <label class="form-label">Spot name</label>
+          <input type="text" class="form-control" id="scName">
+        </div>
+        <div class="row mb-3">
+          <div class="col">
+            <label class="form-label">Type</label>
+            <select class="form-select" id="scType">
+              <% categories.forEach(c => { %><option value="<%= c.key %>"><%= c.title %></option><% }) %>
+            </select>
+          </div>
+          <div class="col">
+            <label class="form-label">City</label>
+            <input type="text" class="form-control" id="scCity">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Address</label>
+          <input type="text" class="form-control" id="scAddress">
+        </div>
+        <div class="row mb-3">
+          <div class="col"><label class="form-label">Latitude</label><input type="text" class="form-control" id="scLat"></div>
+          <div class="col"><label class="form-label">Longitude</label><input type="text" class="form-control" id="scLng"></div>
+        </div>
+        <div class="row mb-2">
+          <div class="col"><label class="form-label">Check-in radius (m)</label><input type="number" class="form-control" id="scRadius" value="50"></div>
+          <div class="col"><label class="form-label">Points / check-in</label><input type="number" class="form-control" id="scPoints" value="100"></div>
+        </div>
+        <div class="ss-chiprow mb-3">
+          <% [50,100,150,250,500].forEach(p => { %><button type="button" class="ss-chip sc-pt <%= p===100?'active':'' %>" data-pts="<%= p %>">+<%= p %></button><% }) %>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="scDesc" rows="2"></textarea>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" id="scActive" checked style="width:2.4em;height:1.3em"></div>
+          <div><div class="fw-semibold">Active</div><div class="text-muted small">Visible to users for check-ins</div></div>
+        </div>
+      </div>
+      <div>
+        <label class="form-label"><i class="bi bi-image me-1"></i>Pin location</label>
+        <div id="ssPinMap"></div>
+        <div class="ss-coordtag" id="scCoordTag"></div>
+        <div class="ss-section-label">Photos (from snaps)</div>
+        <div class="ss-snaps" id="scPhotos"></div>
+      </div>
+    </div>
+    <div class="ss-mfoot">
+      <span class="text-muted small me-auto"><i class="bi bi-info-circle me-1"></i>Publishing connects once the API is wired.</span>
+      <button class="btn btn-secondary js-cclose">Cancel</button>
+      <button class="btn btn-gradient" id="scPublish"><i class="bi bi-plus-lg me-1"></i>Publish spot</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const MAPS_KEY = '<%= mapsApiKey %>';
+  const TYPE_MAP = { 'Bar':'bars', 'Cafe':'cafes', 'Event (Outdoor)':'outdoors', 'Venue':'venue-events', 'Restaurant':'restaurants' };
+  const DARK_MAP = [
+    { elementType:'geometry', stylers:[{color:'#1b2230'}] },
+    { elementType:'labels.text.stroke', stylers:[{color:'#1b2230'}] },
+    { elementType:'labels.text.fill', stylers:[{color:'#8a94a6'}] },
+    { featureType:'water', elementType:'geometry', stylers:[{color:'#0f1626'}] },
+    { featureType:'road', elementType:'geometry', stylers:[{color:'#2a3142'}] },
+    { featureType:'poi', elementType:'labels', stylers:[{visibility:'off'}] },
+  ];
+  let pinMap, pinMarker, geocoder, currentSug = null;
+  function $(id){ return document.getElementById(id); }
+
+  function loadMaps(cb){
+    if (window.google && window.google.maps) { cb(); return; }
+    if (!MAPS_KEY) { console.warn('No GOOGLE_MAPS_API_KEY'); return; }
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=places';
+    s.async = true; s.defer = true; s.onload = cb;
+    document.head.appendChild(s);
+  }
+  function snapTiles(n){ let h=''; for(let i=0;i<n;i++) h+='<span class="ss-snap"><i class="bi bi-image" style="font-size:.8rem;color:#cdb6ff"></i></span>'; return h || '<span class="text-muted">No snaps</span>'; }
+
+  // ---- View modal ----
+  function openView(s){
+    currentSug = s;
+    $('svName').textContent = s.name;
+    $('svBy').textContent = '@' + s.user + ' · ' + s.submitted;
+    $('svType').textContent = s.type;
+    const sb = $('svStatus'); sb.textContent = s.status; sb.className = 'ss-badge ' + s.status;
+    $('svAddr').textContent = s.address;
+    $('svCoords').textContent = (s.lat && s.lng) ? (s.lat + ', ' + s.lng) : '—';
+    $('svNote').textContent = s.note || '—';
+    $('svSnaps').innerHTML = snapTiles(s.snaps);
+    $('ssView').classList.add('open');
+  }
+  function closeView(){ $('ssView').classList.remove('open'); }
+
+  // ---- Create modal ----
+  function openCreate(s){
+    currentSug = s;
+    $('scName').value = s.name;
+    $('scType').value = TYPE_MAP[s.type] || 'bars';
+    $('scCity').value = s.city || '';
+    $('scAddress').value = s.address || '';
+    $('scLat').value = s.lat || '';
+    $('scLng').value = s.lng || '';
+    $('scDesc').value = s.note || '';
+    $('scCoordTag').textContent = (s.lat && s.lng) ? (s.lat + ', ' + s.lng) : '—';
+    $('scPhotos').innerHTML = snapTiles(s.snaps);
+    $('ssCreate').classList.add('open');
+    loadMaps(() => initPinMap(s.lat || 40.7128, s.lng || -74.006));
+  }
+  function closeCreate(){ $('ssCreate').classList.remove('open'); }
+
+  function initPinMap(lat, lng){
+    const start = { lat: Number(lat), lng: Number(lng) };
+    if (!geocoder) geocoder = new google.maps.Geocoder();
+    if (!pinMap){
+      pinMap = new google.maps.Map($('ssPinMap'), { center:start, zoom:14, styles:DARK_MAP, disableDefaultUI:true, zoomControl:true });
+      pinMarker = new google.maps.Marker({ map:pinMap, position:start, draggable:true });
+      pinMap.addListener('click', e => setPin(e.latLng));
+      pinMarker.addListener('dragend', e => setPin(e.latLng));
+    } else {
+      google.maps.event.trigger(pinMap, 'resize');
+      pinMap.setCenter(start); pinMarker.setPosition(start);
+    }
+    setTimeout(() => { google.maps.event.trigger(pinMap, 'resize'); pinMap.setCenter(start); }, 70);
+  }
+  function setPin(latLng){
+    pinMarker.setPosition(latLng);
+    const la = latLng.lat(), ln = latLng.lng();
+    $('scLat').value = la.toFixed(6); $('scLng').value = ln.toFixed(6);
+    $('scCoordTag').textContent = la.toFixed(6) + ', ' + ln.toFixed(6);
+    reverseGeocode(latLng); // refresh Address + City to match the new pin
+  }
+  function reverseGeocode(latLng){
+    if (!geocoder) return;
+    geocoder.geocode({ location: latLng }, (results, status) => {
+      if (status !== 'OK' || !results || !results[0]) return;
+      const r = results[0];
+      $('scAddress').value = r.formatted_address || '';
+      const comp = r.address_components || [];
+      const city = comp.find(c => c.types.includes('locality'))
+        || comp.find(c => c.types.includes('postal_town'))
+        || comp.find(c => c.types.includes('administrative_area_level_2'));
+      if (city) $('scCity').value = city.long_name;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // row buttons
+    document.querySelectorAll('.js-view').forEach(b => b.addEventListener('click', () => openView(JSON.parse(b.dataset.sug))));
+    document.querySelectorAll('.js-create').forEach(b => b.addEventListener('click', () => openCreate(JSON.parse(b.dataset.sug))));
+    document.querySelectorAll('.js-dismiss').forEach(b => b.addEventListener('click', e => {
+      const row = e.target.closest('tr');
+      if (confirm('Dismiss this suggestion?')) row.remove();
+    }));
+
+    // view modal buttons
+    document.querySelectorAll('.js-vclose').forEach(b => b.addEventListener('click', closeView));
+    $('ssView').addEventListener('click', e => { if (e.target.id === 'ssView') closeView(); });
+    document.querySelector('.js-mark-review').addEventListener('click', () => { updateRowStatus(currentSug.id, 'reviewing'); closeView(); });
+    document.querySelector('.js-reject').addEventListener('click', () => { updateRowStatus(currentSug.id, 'rejected'); closeView(); });
+    document.querySelector('.js-create-from-view').addEventListener('click', () => { closeView(); openCreate(currentSug); });
+
+    // create modal
+    document.querySelectorAll('.js-cclose').forEach(b => b.addEventListener('click', closeCreate));
+    $('ssCreate').addEventListener('click', e => { if (e.target.id === 'ssCreate') closeCreate(); });
+    document.querySelectorAll('.sc-pt').forEach(ch => ch.addEventListener('click', () => {
+      document.querySelectorAll('.sc-pt').forEach(c => c.classList.remove('active'));
+      ch.classList.add('active'); $('scPoints').value = ch.dataset.pts;
+    }));
+    ['scLat','scLng'].forEach(id => $(id).addEventListener('change', () => {
+      const la = parseFloat($('scLat').value), ln = parseFloat($('scLng').value);
+      if (Number.isFinite(la) && Number.isFinite(ln) && pinMap){ const ll={lat:la,lng:ln}; pinMap.setCenter(ll); pinMarker.setPosition(ll); $('scCoordTag').textContent = la.toFixed(6)+', '+ln.toFixed(6); reverseGeocode(new google.maps.LatLng(la, ln)); }
+    }));
+    $('scPublish').addEventListener('click', () => {
+      const name = $('scName').value.trim();
+      const la = parseFloat($('scLat').value), ln = parseFloat($('scLng').value);
+      let bad = false;
+      if (!name){ $('scName').classList.add('ss-invalid'); bad=true; } else $('scName').classList.remove('ss-invalid');
+      if (!Number.isFinite(la) || !Number.isFinite(ln)){ $('scLat').classList.add('ss-invalid'); $('scLng').classList.add('ss-invalid'); bad=true; }
+      else { $('scLat').classList.remove('ss-invalid'); $('scLng').classList.remove('ss-invalid'); }
+      if (bad) return;
+      if (currentSug) updateRowStatus(currentSug.id, 'approved');
+      alert('Spot published ✓\n\n' + name + ' → live map\nType: ' + $('scType').value + ' · Points: ' + $('scPoints').value + '\n\n(Mock — saving connects once the API is wired.)');
+      closeCreate();
+    });
+
+    // stat-card filter
+    document.querySelectorAll('.ss-stat').forEach(card => card.addEventListener('click', () => {
+      document.querySelectorAll('.ss-stat').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      const f = card.dataset.filter;
+      document.querySelectorAll('tbody tr').forEach(tr => {
+        tr.style.display = (f === 'all' || tr.dataset.status === f) ? '' : 'none';
+      });
+    }));
+  });
+
+  function updateRowStatus(id, status){
+    const row = document.querySelector('tr[data-id="' + id + '"]');
+    if (!row) return;
+    row.dataset.status = status;
+    const badge = row.querySelector('.ss-badge');
+    badge.textContent = status; badge.className = 'ss-badge ' + status;
+  }
+</script>
