@@ -1,3 +1,10 @@
+// Load .env before ANY other require. Modules read process.env at require time
+// (exploreController captures its cache TTL, points/limits are read as consts),
+// and dotenv used to arrive only as a side effect of utils/sendEmail.js being
+// pulled in by authRoutes — which happens to be required before exploreRoutes.
+// Reorder those two lines and the defaults silently win.
+require('dotenv').config({ quiet: true });
+
 // Default timezone — app launches in Boston, so all server-side date
 // computations (cron triggers, daily/weekly challenge windows, new Date()
 // formatting) align with Eastern Time unless an explicit TZ env var is set.
