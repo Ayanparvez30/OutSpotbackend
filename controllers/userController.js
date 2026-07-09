@@ -1050,8 +1050,7 @@ async function getUserStatsByUserId(req, res) {
       friendsCount,
       groupsCount,
       myCommunity,
-      uniquePlaces,
-      uniqueCoords,
+      allVisitedPoints,
       challengesCompleted,
       user,
     ] = await Promise.all([
@@ -1067,17 +1066,20 @@ async function getUserStatsByUserId(req, res) {
         where: { creatorId: userId },
         select: { id: true, name: true, imageUrl: true },
       }),
-      // Unique placeId-based visits
+      // Load all visited points, dedupe via central util so mixed placeId /
+      // coord-only rows and GPS drift don't over-count.
       prisma.locationPoint.findMany({
-        where: { userId, placeId: { not: null } },
-        distinct: ["placeId"],
-        select: { placeId: true },
-      }),
-      // Unique coordinate-based visits (no placeId)
-      prisma.locationPoint.findMany({
-        where: { userId, placeId: null, latitude: { not: null }, longitude: { not: null } },
-        distinct: ["latitude", "longitude"],
-        select: { latitude: true, longitude: true },
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          placeId: true,
+          placeName: true,
+          latitude: true,
+          longitude: true,
+          mediaUrl: true,
+          points: true,
+          createdAt: true,
+        },
       }),
       // Completed challenges (count via ChallengeCompletion — one row per completed window)
       prisma.challengeCompletion.count({ where: { userId } }),
@@ -1087,7 +1089,8 @@ async function getUserStatsByUserId(req, res) {
       }),
     ]);
 
-    const spotsVisited = uniquePlaces.length + uniqueCoords.length;
+    const { dedupeVisitedSpots } = require('../utils/visitedSpots');
+    const spotsVisited = dedupeVisitedSpots(allVisitedPoints).length;
 
     return res.json({
       success: true,
@@ -1249,58 +1252,11 @@ async function getUserVisitedSpots(req, res) {
       },
     });
 
-    // Infer placeType from placeName when the DB column is null (pre-migration records)
-    const inferPlaceType = (name) => {
-      if (!name) return null;
-      const n = name.toLowerCase();
-      if (/rooftop/.test(n)) return 'Rooftop Bars';
-      if (/cafe|coffee|bakery|patisserie/.test(n)) return 'Cafes';
-      if (/bar|pub|lounge|tavern/.test(n)) return 'Rooftop Bars';
-      if (/restaurant|grill|bistro|diner|eatery|kitchen|food/.test(n)) return 'Popular Restaurants';
-      if (/park|garden|trail|nature|outdoor|reserve|forest/.test(n)) return 'Outdoor Activities';
-      if (/concert|venue|theater|theatre|arena|stadium|event/.test(n)) return 'Venue Events';
-      return null;
-    };
-
-    // De-duplicate: group by placeId (if present) or by lat+lng key
-    const spotMap = new Map();
-
-    for (const point of allPoints) {
-      const key = point.placeId
-        ? `place:${point.placeId}`
-        : `coord:${point.latitude?.toFixed(5)},${point.longitude?.toFixed(5)}`;
-
-      if (!spotMap.has(key)) {
-        // First visit (newest due to desc order) — use as representative
-        spotMap.set(key, {
-          placeId: point.placeId || null,
-          placeName: point.placeName || null,
-          placeType: point.placeType || inferPlaceType(point.placeName),
-          latitude: point.latitude,
-          longitude: point.longitude,
-          mediaUrl: point.mediaUrl,
-          firstVisitedAt: point.createdAt,
-          lastVisitedAt: point.createdAt,
-          visitCount: 1,
-          totalPoints: point.points,
-        });
-      } else {
-        const existing = spotMap.get(key);
-        existing.visitCount += 1;
-        existing.totalPoints += point.points;
-        // allPoints is desc, so older dates come later
-        existing.firstVisitedAt = point.createdAt;
-        // Keep placeType from most recent visit (or infer) if not yet set
-        if (!existing.placeType) {
-          existing.placeType = point.placeType || inferPlaceType(point.placeName);
-        }
-      }
-    }
-
-    // Sort unique spots by lastVisitedAt desc
-    const spots = Array.from(spotMap.values()).sort(
-      (a, b) => new Date(b.lastVisitedAt) - new Date(a.lastVisitedAt)
-    );
+    // Central dedupe: handles placeId+coord overlap, GPS drift (coord bucket),
+    // cross-key haversine merge, and promotes non-empty mediaUrl from older
+    // visits when the newest visit has none. See utils/visitedSpots.js.
+    const { dedupeVisitedSpots } = require('../utils/visitedSpots');
+    const spots = dedupeVisitedSpots(allPoints);
 
     return res.json({
       success: true,

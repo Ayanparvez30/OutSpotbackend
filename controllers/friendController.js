@@ -1507,27 +1507,18 @@ exports.getFriendProfile = async (req, res) => {
       ? communities[0].imageUrl || ""
       : "";
 
-    // Spots visited count + recent visited spots
-    const uniqueVisitedPlaces = await prisma.locationPoint.findMany({
-      where: { userId: friendId, placeId: { not: null } },
-      distinct: ["placeId"],
-      select: { placeId: true },
-    });
-    const uniqueVisitedCoords = await prisma.locationPoint.findMany({
-      where: { userId: friendId, placeId: null, latitude: { not: null }, longitude: { not: null } },
-      distinct: ["latitude", "longitude"],
-      select: { latitude: true, longitude: true },
-    });
-    const spotsVisited = uniqueVisitedPlaces.length + uniqueVisitedCoords.length;
-
-    const recentVisitedSpots = await prisma.locationPoint.findMany({
+    // Spots visited count + recent visited spots — deduped via the central
+    // util so mixed placeId/coord rows and GPS drift don't over-count, and the
+    // representative for each place uses a non-empty mediaUrl if any older
+    // visit has one. See utils/visitedSpots.js.
+    const allVisitedPoints = await prisma.locationPoint.findMany({
       where: { userId: friendId },
       orderBy: { createdAt: "desc" },
-      take: 10,
       select: {
         id: true,
         placeId: true,
         placeName: true,
+        placeType: true,
         latitude: true,
         longitude: true,
         mediaUrl: true,
@@ -1535,6 +1526,10 @@ exports.getFriendProfile = async (req, res) => {
         createdAt: true,
       },
     });
+    const { dedupeVisitedSpots } = require('../utils/visitedSpots');
+    const dedupedVisitedSpots = dedupeVisitedSpots(allVisitedPoints);
+    const spotsVisited = dedupedVisitedSpots.length;
+    const recentVisitedSpots = dedupedVisitedSpots.slice(0, 10);
 
     // this friend's weekly points from ledger
     const thisWeekPoints = await getWeeklyPointsForUser(friendId);
@@ -1817,27 +1812,18 @@ exports.getUserProfile = async (req, res) => {
       });
       communities = communityRows.map((c) => c.community);
 
-      // Spots visited count + recent visited spots
-      const upUniquePlaces = await prisma.locationPoint.findMany({
-        where: { userId: targetUserId, placeId: { not: null } },
-        distinct: ["placeId"],
-        select: { placeId: true },
-      });
-      const upUniqueCoords = await prisma.locationPoint.findMany({
-        where: { userId: targetUserId, placeId: null, latitude: { not: null }, longitude: { not: null } },
-        distinct: ["latitude", "longitude"],
-        select: { latitude: true, longitude: true },
-      });
-      spotsVisited = upUniquePlaces.length + upUniqueCoords.length;
-
-      recentVisitedSpots = await prisma.locationPoint.findMany({
+      // Spots visited count + recent visited spots — deduped via the central
+      // util (utils/visitedSpots.js) so mixed placeId/coord rows and GPS drift
+      // don't over-count, and the representative for each place uses a
+      // non-empty mediaUrl if any older visit has one.
+      const allUpVisitedPoints = await prisma.locationPoint.findMany({
         where: { userId: targetUserId },
         orderBy: { createdAt: "desc" },
-        take: 10,
         select: {
           id: true,
           placeId: true,
           placeName: true,
+          placeType: true,
           latitude: true,
           longitude: true,
           mediaUrl: true,
@@ -1845,6 +1831,10 @@ exports.getUserProfile = async (req, res) => {
           createdAt: true,
         },
       });
+      const { dedupeVisitedSpots: upDedupe } = require('../utils/visitedSpots');
+      const upDeduped = upDedupe(allUpVisitedPoints);
+      spotsVisited = upDeduped.length;
+      recentVisitedSpots = upDeduped.slice(0, 10);
 
       // Fetch most recent joined or created community
       const mostRecentCommunity = await prisma.communityMember.findFirst({
