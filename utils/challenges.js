@@ -1,6 +1,5 @@
 // utils/challenges.js
 const { DateTime } = require('luxon');
-const { notifyUser } = require('../utils/notificationService'); // Import notification service
 
 function resolveZone(userZone) {
   return userZone || process.env.APP_TIMEZONE || 'America/New_York';
@@ -54,60 +53,6 @@ function seededPick(array, seedStr) {
   const idx = Math.floor(rand() * array.length);
   return array[idx];
 }
-// The "already notified?" read and the notify write are not atomic, so two
-// concurrent requests for the same user could both miss and both notify.
-// Serialize per user+window key; the guard below then sees the first write.
-const notifyLocks = new Map();
-async function maybeNotify(prisma, userId, assign, freq, zone) {
-  if (!assign || !assign.challenge) return;
-  const lockKey = `${userId}:${freq}`;
-  const prev = notifyLocks.get(lockKey) || Promise.resolve();
-  const run = prev
-    .catch(() => {})
-    .then(() => notifyOnce(prisma, userId, assign, freq, zone));
-  notifyLocks.set(lockKey, run);
-  try {
-    await run;
-  } finally {
-    if (notifyLocks.get(lockKey) === run) notifyLocks.delete(lockKey);
-  }
-}
-
-async function notifyOnce(prisma, userId, assign, freq, zone) {
-  const challenge = assign.challenge;
-  const type = freq === 'DAILY' ? 'DAILY_CHALLENGE' : 'WEEKLY_CHALLENGE';
-  const today = new Date();
-  let start, end;
-  if (freq === 'DAILY') {
-    start = startOfDayInZone(today, zone);
-    end = endOfDayInZone(today, zone);
-  } else {
-    const week = getWeekStartEndInZone(today, zone);
-    start = week.startUTC;
-    end = week.endUTC;
-  }
-
-  // Add unique constraint check for notifications
-  const existing = await prisma.notification.findFirst({
-    where: {
-      userId,
-      type,
-      title: challenge.title,
-      createdAt: { gte: start, lte: end },
-    },
-  });
-
-  if (!existing) {
-    // Send push notification
-    await notifyUser(
-      userId,
-      type,
-      challenge.title,
-      challenge.description,
-      { challengeId: challenge.id }
-    );
-  }
-}
 // Resolve which challenge is live for the current window. An admin schedule
 // override (ChallengeSchedule) wins; otherwise fall back to the deterministic
 // date-seeded pick from the eligible active pool. Pure/read-only — no notify.
@@ -143,11 +88,19 @@ async function pickForWindow(prisma, frequency, zone, now = new Date()) {
   return { challenge, windowKey, source: 'auto' };
 }
 
+// Which challenge is assigned to `userId` for the current window. Read-only:
+// selection is user-independent (seed = frequency:windowKey), and the userId
+// arg is kept only so callers read naturally.
+//
+// This function used to also create the DAILY_CHALLENGE / WEEKLY_CHALLENGE
+// notification. It no longer does. Every read path (challenge cards, the full
+// challenge page, submit, the reminder crons) calls this, so the notification
+// fired at an arbitrary time and raced itself across processes. Notifications
+// are now sent only by the morning crons in server.js, which is the one place
+// that actually intends to notify.
 async function getAssignedChallenge(prisma, userId, frequency, zone, now = new Date()) {
   const picked = await pickForWindow(prisma, frequency, zone, now);
   if (!picked.challenge) return { challenge: null, windowKey: picked.windowKey };
-  // Create notifications for assigned challenges if not already present
-  await maybeNotify(prisma, userId, { challenge: picked.challenge }, frequency, zone);
   return { challenge: picked.challenge, windowKey: picked.windowKey };
 }
 

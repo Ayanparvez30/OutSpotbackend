@@ -1,7 +1,10 @@
 // scripts/sendChallengeNotifications.js
-// This script can be run manually or scheduled via cron jobs
+// Manual trigger for the challenge notification the morning crons in server.js
+// send automatically. Safe to re-run: the unique index on
+// Notification(userId, type, windowKey) means users already notified for the
+// current window are skipped.
 
-const { notifyAllUsersAboutDailyChallenge, notifyAllUsersAboutWeeklyChallenge } = require('../utils/challengeNotifications');
+const { sendDailyChallengeNotice, sendWeeklyChallengeNotice } = require('../utils/challengeNotifications');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -19,10 +22,10 @@ async function main() {
   try {
     if (type === 'daily') {
       console.log('🔔 Sending daily challenge notifications...');
-      await notifyAllUsersAboutDailyChallenge();
+      await sendDailyChallengeNotice();
     } else if (type === 'weekly') {
       console.log('🔔 Sending weekly challenge notifications...');
-      await notifyAllUsersAboutWeeklyChallenge();
+      await sendWeeklyChallengeNotice();
     } else {
       console.error('❌ Invalid type. Use "daily" or "weekly"');
       process.exit(1);

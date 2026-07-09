@@ -10,19 +10,37 @@ const prisma = new PrismaClient();
  * @param {string} title
  * @param {string} description
  * @param {object} data - extra data (e.g., { actorId, friendId, ... })
+ * @param {object} [opts]
+ * @param {string} [opts.windowKey] - once-per-window idempotency key. When set,
+ *   the DB unique index on (userId, type, windowKey) makes a second call for the
+ *   same window a no-op that returns null instead of inserting a duplicate. This
+ *   holds across processes, unlike a check-then-insert guard.
+ * @returns {Promise<object|null>} the created row, or null if it already existed.
  */
-async function notifyUser(userId, type, title, description, data = {}) {
+async function notifyUser(userId, type, title, description, data = {}, opts = {}) {
   try {
     const { actorId = null, ...restData } = data;
-
+    const windowKey = opts.windowKey ?? null;
 
     // 1) Save to DB (store actorId + extra metadata)
-    const notification = await prisma.notification.create({
-      data: {
-        userId, type, title, description, actorId,
-        data: Object.keys(restData).length > 0 ? restData : undefined,
+    let notification;
+    try {
+      notification = await prisma.notification.create({
+        data: {
+          userId, type, title, description, actorId, windowKey,
+          data: Object.keys(restData).length > 0 ? restData : undefined,
+        }
+      });
+    } catch (createErr) {
+      // P2002 = unique violation on (userId, type, windowKey): another process
+      // already sent this window's notification. Not an error — just stop here
+      // so we don't double-push.
+      if (createErr?.code === 'P2002') {
+        console.log(`ℹ️ Notification ${type}/${windowKey} already sent to user ${userId}, skipping`);
+        return null;
       }
-    });
+      throw createErr;
+    }
 
     // 2) Set notificationRedDot to true for the user (closed-app case — survives
     //    socket emit miss; client GETs the dot on next open).

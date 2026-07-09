@@ -242,11 +242,19 @@ model Notification {
   isRead      Boolean          @default(false)
   createdAt   DateTime         @default(now())
 
+  // Idempotency key for notifications that must fire at most once per user per
+  // time window ("yyyy-LL-dd" of the day for DAILY_CHALLENGE, of the Sunday
+  // week-start for WEEKLY_CHALLENGE). Null for event-driven types such as
+  // FRIEND_REQUEST, which may legitimately repeat — MySQL permits duplicate
+  // NULLs in a unique index, so those rows stay unconstrained.
+  windowKey String?
+
   // relations
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   // indexes
+  @@unique([userId, type, windowKey])
   @@index([userId, createdAt])
   @@index([actorId])
   @@index([userId, isRead, createdAt])

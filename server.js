@@ -223,21 +223,30 @@ cron.schedule('0 2 * * *', async () => {
 const { midnightChallengeScheduler } = require('./schedulers/midnightChallengeScheduler');
 midnightChallengeScheduler.start();
 
-// ---- Challenge reminder pushes (a few hours before window closes) ----
-const { sendDailyReminders, sendWeeklyReminders } = require('./utils/challengeReminders');
-// Daily reminder — 20:00 Boston (TZ = America/New_York set at top of file)
-cron.schedule('0 20 * * *', async () => {
+// ---- Challenge notifications — exactly one per user per window ----
+// These crons are the ONLY place a DAILY_CHALLENGE / WEEKLY_CHALLENGE
+// notification is created. Read paths (challenge cards, challenge page, submit)
+// no longer notify as a side effect. The unique index on
+// Notification(userId, type, windowKey) makes a re-run or a second app instance
+// a no-op, so this stays exactly-once even under a clustered deploy.
+const {
+  sendDailyChallengeNotice,
+  sendWeeklyChallengeNotice,
+} = require('./utils/challengeNotifications');
+// Daily — 08:00 Boston (TZ = America/New_York set at top of file)
+cron.schedule('0 8 * * *', async () => {
   try {
-    const r = await sendDailyReminders();
-    console.log(`📬 Daily reminder: sent=${r.sent} candidates=${r.candidates} done=${r.alreadyDone} already=${r.alreadyReminded} noChallenge=${r.noChallenge}`);
-  } catch (e) { console.error('❌ Daily reminder cron error:', e.message); }
+    const r = await sendDailyChallengeNotice();
+    console.log(`📬 Daily challenge notice: sent=${r.sent} alreadySent=${r.alreadySent} failed=${r.failed}`);
+  } catch (e) { console.error('❌ Daily challenge notice cron error:', e.message); }
 });
-// Weekly reminder — Sat 18:00 Boston (~30 hours before Mon 00:00 roll)
-cron.schedule('0 18 * * 6', async () => {
+// Weekly — Sunday 09:00 Boston. The weekly window is Sun→Sat, so this lands an
+// hour after the daily notice on the morning the window opens.
+cron.schedule('0 9 * * 0', async () => {
   try {
-    const r = await sendWeeklyReminders();
-    console.log(`📬 Weekly reminder: sent=${r.sent} candidates=${r.candidates} done=${r.alreadyDone} already=${r.alreadyReminded} noChallenge=${r.noChallenge}`);
-  } catch (e) { console.error('❌ Weekly reminder cron error:', e.message); }
+    const r = await sendWeeklyChallengeNotice();
+    console.log(`📬 Weekly challenge notice: sent=${r.sent} alreadySent=${r.alreadySent} failed=${r.failed}`);
+  } catch (e) { console.error('❌ Weekly challenge notice cron error:', e.message); }
 });
 
 // ---- Leaderboard cash-prize reminders ----

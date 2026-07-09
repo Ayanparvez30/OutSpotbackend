@@ -10,7 +10,6 @@ const {
   checkTimeConstraints,
   checkDuplicateImage,
 } = require('../utils/challengeVerification');
-const { notifyNewChallenge } = require('../utils/challengeNotifications');
 
 // ✅ weekly points single source of truth
 const {
@@ -76,8 +75,8 @@ exports.getChallengeCards = async (req, res) => {
   const daily = await getAssignedChallenge(prisma, userId, 'DAILY', zone, now);
   const weekly = await getAssignedChallenge(prisma, userId, 'WEEKLY', zone, now);
 
-  // No notify here: getAssignedChallenge() already emits the per-window
-  // DAILY_CHALLENGE / WEEKLY_CHALLENGE notification exactly once.
+  // Read-only. DAILY_CHALLENGE / WEEKLY_CHALLENGE notifications are sent solely
+  // by the morning crons in server.js — never from a request path.
 
   async function buildCard(assign, freq) {
     if (!assign || !assign.challenge) return null;
@@ -131,27 +130,6 @@ async function getFull(req, res, frequency) {
   if (!assign || !assign.challenge) return res.status(404).json({ error: 'No challenge available' });
 
   const { challenge, windowKey } = assign;
-
-    // Create notification for assigned challenge if not already present
-    const type = frequency === 'DAILY' ? 'DAILY_CHALLENGE' : 'WEEKLY_CHALLENGE';
-    let start, end;
-    if (frequency === 'DAILY') {
-      start = startOfDayInZone(now, zone);
-      end = endOfDayInZone(now, zone);
-    } else {
-      const week = getWeekStartEndInZone(now, zone);
-      start = week.startUTC;
-      end = week.endUTC;
-    }
-    const existing = await prisma.notification.findFirst({
-      where: {
-        userId,
-        type,
-        title: challenge.title,
-        createdAt: { gte: start, lte: end },
-      },
-    });
-
 
   const window = (frequency === 'DAILY')
     ? { startUTC: startOfDayInZone(now, zone), endUTC: endOfDayInZone(now, zone) }
