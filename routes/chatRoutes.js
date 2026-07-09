@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const chatController = require('../controllers/chatController');
+const chatLockController = require('../controllers/chatLockController');
 const { checkAuth } = require('../middlewares/authMiddleware');
 
 router.post('/chats/create', checkAuth, chatController.createPrivateChat);
@@ -16,6 +17,12 @@ router.get('/chats/messages-paginated/:chatId', checkAuth, chatController.getMes
 router.get('/chats/:user2Id', checkAuth, chatController.getChatsByUsers);
 router.get('/chats/groupMembers/:chatId', checkAuth, chatController.getGroupMembers);
 
+// -------- Per-user chat lock (password-protected chats) --------
+// Distinct from PUT /chats/lock/:chatId (group-freeze admin flag on Chat.isLocked).
+router.post('/chats/:chatId/lock/verify', checkAuth, chatLockController.verifyLock);
+router.get('/chats/:chatId/lock/status',  checkAuth, chatLockController.lockStatus);
+router.post('/chats/:chatId/lock',        checkAuth, chatLockController.setLock);
+router.delete('/chats/:chatId/lock',      checkAuth, chatLockController.removeLock);
 
 // add users (admin only)
 router.put('/chats/addUser/:chatId', checkAuth, chatController.addUsersToGroup);

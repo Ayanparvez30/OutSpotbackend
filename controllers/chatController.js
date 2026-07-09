@@ -976,6 +976,12 @@ const chats = await prisma.chat.findMany({
     // Read-path filtering for full message lists is in getMessages.
     const blockedIds = await getBlockedUserIdSet(currentUserId);
 
+    // Per-user chat lock (password-protected). Bulk fetch once so each chat
+    // gets an isPasswordLocked flag without an N+1 query. Client hides the
+    // preview + tick + shows a lock icon when true.
+    const { getLockedChatIdSet } = require('./chatLockController');
+    const lockedChatIds = await getLockedChatIdSet(currentUserId, chatIds);
+
     const enrichedChats = chats.map(chat => {
       const chatUsers = chat.users.map(userOnChat => {
         const u = userOnChat.user;
@@ -1031,6 +1037,7 @@ const chats = await prisma.chat.findMany({
         users: chatUsers,
         unreadCount,
         isMuted,
+        isPasswordLocked: lockedChatIds.has(chat.id),
         latestMessage: latestMessage ? {
           id: latestMessage.id,
           content: latestMessage.content,
@@ -1286,12 +1293,18 @@ exports.getChatsByUsers = async (req, res) => {
 });
 
 
-    const result = chats
-      .filter(c => {
-        const set = new Set(c.users.map(u => u.userId));
-        return set.has(user1Id) && set.has(user2Id) && set.size <= 2;
-      })
-      .map(c => ({ chatId: c.id }));
+    const matched = chats.filter(c => {
+      const set = new Set(c.users.map(u => u.userId));
+      return set.has(user1Id) && set.has(user2Id) && set.size <= 2;
+    });
+    // Per-user chat lock flag on the 1:1 chat-detail lookup — the client needs
+    // isPasswordLocked here so it can render the lock overlay before opening.
+    const { getLockedChatIdSet } = require('./chatLockController');
+    const lockedChatIds = await getLockedChatIdSet(user1Id, matched.map(c => c.id));
+    const result = matched.map(c => ({
+      chatId: c.id,
+      isPasswordLocked: lockedChatIds.has(c.id),
+    }));
 
     res.json(result);
   } catch (e) {
@@ -1954,6 +1967,9 @@ const chats = await prisma.chat.findMany({
     const unreadCountsMap = await getBulkUnreadCounts(currentUserId, chatIds);
 
     const blockedIds = await getBlockedUserIdSet(currentUserId);
+    // Per-user chat lock — one bulk query, no N+1.
+    const { getLockedChatIdSet: _getLockedChatIdSetUnread } = require('./chatLockController');
+    const lockedChatIds = await _getLockedChatIdSetUnread(currentUserId, chatIds);
 
     const enrichedChats = chats.map(chat => {
       const chatUsers = chat.users.map(userOnChat => {
@@ -1990,6 +2006,7 @@ const chats = await prisma.chat.findMany({
         users: chatUsers,
         unreadCount,
         isMuted,
+        isPasswordLocked: lockedChatIds.has(chat.id),
         latestMessage: latestMessage ? {
           id: latestMessage.id,
           content: latestMessage.content,
@@ -2074,6 +2091,9 @@ exports.getMyGroupChats = async (req, res) => {
     const unreadCountsMap = await getBulkUnreadCounts(currentUserId, chatIds);
 
     const blockedIds = await getBlockedUserIdSet(currentUserId);
+    // Per-user chat lock — one bulk query, no N+1.
+    const { getLockedChatIdSet: _getLockedChatIdSetGroup } = require('./chatLockController');
+    const lockedChatIds = await _getLockedChatIdSetGroup(currentUserId, chatIds);
 
     const enrichedChats = chats.map(chat => {
       let latestMessage = chat.messages[0] || null;
@@ -2136,6 +2156,7 @@ exports.getMyGroupChats = async (req, res) => {
         unreadCount: (chat.users.find(u => u.userId === currentUserId)?.isMuted)
           ? 0 : (unreadCountsMap[chat.id] || 0),
         isMuted: chat.users.find(u => u.userId === currentUserId)?.isMuted || false,
+        isPasswordLocked: lockedChatIds.has(chat.id),
         latestMessage: latestMessage ? { ...latestMessage, readBy, deliveredTo } : null,
         totalMessages: chat._count.messages,
         _sortTime,
