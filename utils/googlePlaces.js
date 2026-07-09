@@ -204,8 +204,9 @@ async function nearbyByDistance({ lat, lng, type, pagetoken }) {
 
 // searchNearby returns max 20 in one call — no pagination on this endpoint.
 // maxPages is preserved in signature for caller compat but ignored (single fetch).
-async function nearbyByDistanceAll({ lat, lng, type, radius, maxPages = 3 }) { // eslint-disable-line no-unused-vars
-  const j = await searchNearbyNew({ lat, lng, type, radius: radius || 16093, rank: 'POPULARITY' });
+// `rank` picks WHICH 20: the most popular, or the 20 nearest.
+async function nearbyByDistanceAll({ lat, lng, type, radius, rank = 'POPULARITY', maxPages = 3 }) { // eslint-disable-line no-unused-vars
+  const j = await searchNearbyNew({ lat, lng, type, radius: radius || 16093, rank });
   return (j.places || []).map(mapNewToLegacy).filter(Boolean);
 }
 
@@ -249,8 +250,41 @@ async function details(place_id) {
   return mapNewToLegacy(j);
 }
 
+// Details is the priciest Places SKU, and the list endpoints call it once per
+// card — 20 calls to paint one page, re-paid on every scroll and by every user
+// looking at the same neighbourhood. Memoize by place_id.
+//
+// The cached fields (name, address, phone, website, photos, weekday hours) are
+// effectively static. `opening_hours.open_now` is NOT — callers rendering a list
+// must read open_now off the fresh search result and treat details as a fallback.
+const DETAILS_CACHE = new Map(); // place_id -> { ts, value }
+const DETAILS_TTL_MS   = Number(process.env.PLACE_DETAILS_TTL_MS   || 6 * 60 * 60 * 1000);
+const DETAILS_CACHE_MAX = Number(process.env.PLACE_DETAILS_CACHE_MAX || 5000);
+
+async function detailsCached(place_id) {
+  if (!place_id) return null;
+  const hit = DETAILS_CACHE.get(place_id);
+  if (hit && Date.now() - hit.ts < DETAILS_TTL_MS) {
+    DETAILS_CACHE.delete(place_id); // re-insert → Map keeps insertion order = LRU
+    DETAILS_CACHE.set(place_id, hit);
+    return hit.value;
+  }
+  const value = await details(place_id);
+  if (DETAILS_CACHE.size >= DETAILS_CACHE_MAX) {
+    DETAILS_CACHE.delete(DETAILS_CACHE.keys().next().value); // evict LRU
+  }
+  DETAILS_CACHE.set(place_id, { ts: Date.now(), value });
+  return value;
+}
+
 // --------------- Text search (new v1) ---------------
-async function textSearch({ query, lat, lng, radius = 16093 }) {
+// searchText DOES paginate (unlike searchNearby): the response carries a
+// nextPageToken when more results exist. Ask for it in the field mask.
+const TEXT_SEARCH_FIELD_MASK = `${SEARCH_FIELD_MASK},nextPageToken`;
+
+// One page (<=20 results). A pageToken request must repeat the SAME textQuery /
+// pageSize / bias it was issued for, so callers pass the identical opts back in.
+async function textSearchPage({ query, lat, lng, radius = 16093, pageToken, includedType, rank, pageSize = 20 }) {
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) throw new Error('Missing GOOGLE_MAPS_API_KEY');
 
@@ -259,15 +293,18 @@ async function textSearch({ query, lat, lng, radius = 16093 }) {
     locationBias: {
       circle: { center: { latitude: lat, longitude: lng }, radius },
     },
-    pageSize: 20,
+    pageSize: Math.min(20, Math.max(1, pageSize)),
   };
+  if (pageToken) body.pageToken = pageToken;
+  if (includedType) body.includedType = includedType;
+  if (rank) body.rankPreference = rank;
 
   const r = await fetch(`${NEW_BASE}/places:searchText`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': SEARCH_FIELD_MASK,
+      'X-Goog-FieldMask': TEXT_SEARCH_FIELD_MASK,
     },
     body: JSON.stringify(body),
   });
@@ -275,7 +312,30 @@ async function textSearch({ query, lat, lng, radius = 16093 }) {
   if (!r.ok) {
     throw new Error(`Places TextSearch error: ${j?.error?.status || r.status} ${j?.error?.message || ''}`);
   }
-  return (j.places || []).map(mapNewToLegacy).filter(Boolean);
+  return {
+    results: (j.places || []).map(mapNewToLegacy).filter(Boolean),
+    nextPageToken: j.nextPageToken || null,
+  };
+}
+
+// Single page — relevance-ranked top 20. Used by the search endpoint.
+async function textSearch(opts) {
+  const { results } = await textSearchPage(opts);
+  return results;
+}
+
+// Follow nextPageToken up to maxPages. Used to build category card pools, where
+// one page of 20 is nowhere near enough to fill a paginated list.
+async function textSearchAll({ maxPages = 3, ...opts }) {
+  const out = [];
+  let pageToken = null;
+  for (let i = 0; i < maxPages; i++) {
+    const { results, nextPageToken } = await textSearchPage({ ...opts, pageToken });
+    out.push(...results);
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+  }
+  return out;
 }
 
 // --------------- Legacy radius-based nearby — backed by searchNearby ---------------
@@ -305,6 +365,9 @@ module.exports = {
   nearbyByDistance,
   nearbyByDistanceAll,
   details,
+  detailsCached,
   textSearch,
+  textSearchPage,
+  textSearchAll,
   photoUrlByRef,
 };
