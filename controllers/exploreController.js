@@ -27,7 +27,11 @@ const DUP_WINDOW_HOURS      = Number(process.env.EXPLORE_DUP_WINDOW_HOURS       
 // this, Google Places API jitter produces e.g. 60 vs 52 results on two
 // back-to-back calls because next_page_token retries don't always saturate.
 const CATEGORY_CACHE = new Map(); // key -> { ts, candidates }
-const CATEGORY_CACHE_TTL_MS = 5 * 60 * 1000;
+// Every cold entry costs ~40-50 Google calls (core types + long-tail subtypes +
+// text queries), so this TTL is the main lever on the Places bill. Place data is
+// near-static — only open_now moves, and that is read live off the search result.
+// Raise it (30-60 min) in production if the Places spend matters.
+const CATEGORY_CACHE_TTL_MS = Number(process.env.EXPLORE_CATEGORY_CACHE_TTL_MS || 5 * 60 * 1000);
 // Every distinct (category, 110m cell) pins a pool of place objects forever
 // otherwise — one process serving a whole city grows without bound.
 const CATEGORY_CACHE_MAX = Number(process.env.EXPLORE_CATEGORY_CACHE_MAX || 500);
@@ -88,7 +92,7 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
       sortedPool: [],            // append-only — position locked once a place lands here
       seenIds: new Set(),        // dedup guard (covers ALL expansion stages)
       cellsLoaded: new Set(),
-      textQueriesLoaded: new Set(),
+      baseLoaded: false,         // long-tail subtypes + text queries fetched once
     };
     CATEGORY_CACHE.set(key, entry);
   }
@@ -120,8 +124,44 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
   };
 
   const cells = buildGridCells(lat, lng, radius);
+  const onFail = (what) => (e) => { console.error(`[explore] ${cat.key} ${what} failed:`, e.message); return []; };
 
-  // Stage 1-3: grid expansion.
+  // Base load — everything that DEFINES this category's coverage, fetched once
+  // per cache entry and all in flight together so latency is one round trip.
+  //
+  // searchNearby returns the 20 most popular places per type, so asking only for
+  // `restaurant` never surfaces a ramen shop or a sushi bar: they lose the
+  // popularity race to steakhouses. Google's taxonomy has a searchable subtype
+  // for each (`ramen_restaurant`, `sushi_restaurant`, `video_arcade`,
+  // `miniature_golf_course`, …) — one call apiece over the full radius, since a
+  // long-tail subtype is sparse enough that 20 covers the whole area.
+  //
+  // Text queries are coverage too, not a fallback: they used to run only when the
+  // grid came up short, which never happened, so "escape room" and "mini golf"
+  // were unreachable no matter how far the user scrolled.
+  if (!entry.baseLoaded) {
+    const c = cells.center;
+    const [core, extra, text] = await Promise.all([
+      Promise.all(cat.googleTypes.map(t =>
+        nearbyByDistanceAll({ lat: c.lat, lng: c.lng, type: t, radius: c.radius }).catch(onFail(`nearby/${t}`)))),
+      // Ranked by DISTANCE, not popularity: the core types already fetched the
+      // crowd-pleasers, and a subtype's whole job is to reach the tail. Ranking
+      // `italian_restaurant` by popularity returns the same famous places again
+      // and buries the five trattorias four blocks away.
+      Promise.all((cat.extraTypes || []).map(t =>
+        nearbyByDistanceAll({ lat, lng, type: t, radius, rank: 'DISTANCE' }).catch(onFail(`subtype/${t}`)))),
+      Promise.all((cat.textQueries || []).map(q =>
+        textSearchAll({ query: q, lat, lng, radius, maxPages: 2 }).catch(onFail(`text/"${q}"`)))),
+    ]);
+    entry.cellsLoaded.add('center');
+    entry.baseLoaded = true;
+    appendBatch([...core.flat(), ...extra.flat()]);
+    // A "mini golf" result is tagged miniature_golf_course + point_of_interest —
+    // the query already established it belongs here, so skip the type check.
+    appendBatch(text.flat(), { trusted: true });
+  }
+
+  // Grid expansion for the core types — only as deep as the requested page needs.
   for (const stage of GRID_STAGES) {
     if (entry.sortedPool.length >= requiredCount) break;
     const cellsToLoad = stage.cells.filter(c => !entry.cellsLoaded.has(c));
@@ -135,7 +175,7 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
             // A swallowed rejection here is indistinguishable from "Google has no
             // such places", which is how quota/network failures used to surface as
             // silently short card lists. Log, then degrade.
-            .catch((e) => { console.error(`[explore] nearby ${cat.key}/${t}@${cellName} failed:`, e.message); return []; })
+            .catch(onFail(`nearby/${t}@${cellName}`))
             .then(places => ({ cellName, places }))
         );
       }
@@ -149,34 +189,31 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
     appendBatch(batch);
   }
 
-  // Stage 4: searchText queries. Run in parallel and follow nextPageToken —
-  // one page of 20 barely covers a single card page.
-  if (entry.sortedPool.length < requiredCount && Array.isArray(cat.textQueries)) {
-    const pending = cat.textQueries.filter(q => !entry.textQueriesLoaded.has(q));
-    const batches = await Promise.all(pending.map(q =>
-      textSearchAll({ query: q, lat, lng, radius, maxPages: 2 })
-        .then(places => { entry.textQueriesLoaded.add(q); return places; })
-        .catch((e) => { console.error(`[explore] textSearch "${q}" failed:`, e.message); return []; })
-    ));
-    for (const places of batches) appendBatch(places, { trusted: true });
-  }
-
   return entry.sortedPool;
 }
 
-// Bucket definitions. `googleTypes` drives BOTH the searchNearby fetch and the
-// membership test (belongsToCategory) — a place is in the bucket when Google
-// tags it with one of these types.
+// Bucket definitions. Three sources feed a category's card pool, and together
+// they decide what a user can ever see:
 //
-// textQueries: prefer plain nouns. searchText matches the query against place
-// NAMES as well as relevance, so an adjective narrows it to places literally
-// called that: in Boston "popular restaurants" returns 2 results while
-// "restaurants" returns 20 + a nextPageToken. Only keep an adjective when it
-// names a real cuisine/venue kind ("fine dining", "irish pubs").
+//   googleTypes — the broad types. Grid-expanded across 9 cells as the user
+//     paginates. Also the membership test (belongsToCategory), together with
+//     extraTypes.
+//   extraTypes  — Google's long-tail subtypes. searchNearby only ever returns the
+//     20 most popular places per type, so a query for `restaurant` is dominated by
+//     steakhouses and never reaches a ramen shop. Each subtype gets one call over
+//     the full radius; they are sparse enough that 20 covers the area.
+//   textQueries — what a person types into Google Maps. Prefer plain nouns:
+//     searchText matches against place NAMES too, so an adjective narrows it to
+//     places literally called that. In Boston "popular restaurants" returns 2
+//     results where "restaurants" returns 20 + a page token. Keep an adjective
+//     only when it names a real cuisine or venue kind ("fine dining", "irish pubs").
+//
 // Points removed from each bucket — per-place dynamic via pointsForPlace().
 const CATEGORIES = [
   { key: 'venue-events', title: 'Venue Events', icon: '🎤', imageKey: 'venue-events',
     googleTypes: ['night_club', 'karaoke', 'comedy_club', 'live_music_venue', 'concert_hall', 'performing_arts_theater'],
+    extraTypes: ['event_venue', 'auditorium', 'banquet_hall', 'cultural_center', 'arena', 'stadium',
+      'movie_theater', 'amphitheatre', 'dance_hall', 'opera_house'],
     textQueries: ['live music venues', 'nightclubs', 'karaoke bars', 'comedy clubs', 'concert venues'] },
   { key: 'outdoors',     title: 'Outdoors',     icon: '🌳', imageKey: 'outdoors',
     googleTypes: [
@@ -184,20 +221,42 @@ const CATEGORIES = [
       'sports_complex', 'sports_club',
       'bowling_alley', 'aquarium', 'zoo', 'marina', 'amusement_park',
     ],
-    // Only text queries for activities Places API doesn't expose as supported types.
-    textQueries: ['paintball', 'go karting', 'boating', 'hiking trails'] },
+    extraTypes: ['amusement_center', 'video_arcade', 'miniature_golf_course', 'golf_course', 'adventure_sports_center',
+      'sports_activity_location', 'athletic_field', 'ice_skating_rink', 'swimming_pool', 'water_park', 'dog_park',
+      'garden', 'plaza', 'state_park', 'historical_landmark', 'observation_deck', 'skateboard_park'],
+    textQueries: ['paintball', 'go karting', 'boating', 'kayaking', 'hiking trails', 'escape room', 'mini golf', 'arcade'] },
   { key: 'bars',         title: 'Bars',         icon: '🍻', imageKey: 'bars',
     googleTypes: ['bar', 'pub', 'wine_bar', 'bar_and_grill'],
-    textQueries: ['bars', 'irish pubs', 'cocktail bars'] },
+    extraTypes: ['cocktail_bar', 'sports_bar', 'lounge_bar', 'gastropub', 'brewery', 'beer_garden'],
+    textQueries: ['bars', 'irish pubs', 'cocktail bars', 'rooftop bar', 'brewery', 'sports bar'] },
   { key: 'cafes',        title: 'Cafes',        icon: '☕', imageKey: 'cafes',
     // `bakery` earns its place: Tatte, Flour Bakery + Cafe and L.A. Burdick are
     // tagged bakery+restaurant, never `cafe`, so a cafe-only list omitted them.
     googleTypes: ['cafe', 'coffee_shop', 'bakery', 'tea_house'],
-    textQueries: ['coffee shops', 'cafes', 'bakeries'] },
+    extraTypes: ['dessert_shop', 'donut_shop', 'ice_cream_shop', 'juice_shop', 'bagel_shop', 'internet_cafe', 'cat_cafe'],
+    textQueries: ['coffee shops', 'cafes', 'bakeries', 'espresso bar'] },
   { key: 'restaurants',  title: 'Restaurants',  icon: '🍽️', imageKey: 'restaurants',
     googleTypes: ['restaurant', 'meal_takeaway', 'meal_delivery', 'fast_food_restaurant', 'fine_dining_restaurant', 'brunch_restaurant', 'breakfast_restaurant'],
-    textQueries: ['restaurants', 'best restaurants', 'fine dining'] },
+    extraTypes: ['american_restaurant', 'italian_restaurant', 'pizza_restaurant', 'sushi_restaurant', 'japanese_restaurant',
+      'ramen_restaurant', 'chinese_restaurant', 'mexican_restaurant', 'thai_restaurant', 'indian_restaurant',
+      'korean_restaurant', 'vietnamese_restaurant', 'asian_restaurant', 'seafood_restaurant', 'steak_house',
+      'barbecue_restaurant', 'hamburger_restaurant', 'sandwich_shop', 'deli', 'mediterranean_restaurant',
+      'greek_restaurant', 'french_restaurant', 'spanish_restaurant', 'middle_eastern_restaurant',
+      'vegan_restaurant', 'vegetarian_restaurant'],
+    textQueries: ['restaurants', 'best restaurants', 'fine dining', 'sushi', 'ramen', 'pizza', 'steakhouse', 'tacos'] },
 ];
+
+// googleTypes ∪ extraTypes — the full set of Google types that mean "this
+// category". Computed once per bucket; membership runs on every fetched place.
+const CATEGORY_TYPE_SETS = new Map();
+function categoryTypeSet(cat) {
+  let set = CATEGORY_TYPE_SETS.get(cat.key);
+  if (!set) {
+    set = new Set([...cat.googleTypes, ...(cat.extraTypes || [])]);
+    CATEGORY_TYPE_SETS.set(cat.key, set);
+  }
+  return set;
+}
 
 function findCat(key) { return CATEGORIES.find(c => c.key === key); }
 
@@ -240,9 +299,10 @@ async function getTrendingCandidates({ lat, lng, radius }) {
 // Restaurants cards while still showing up in search. Overlap is the truth —
 // Cheers really is both a bar and a restaurant.
 function belongsToCategory(place, cat) {
-  if (place?.primary_type && cat.googleTypes.includes(place.primary_type)) return true;
-  const tset = new Set(Array.isArray(place?.types) ? place.types : []);
-  return cat.googleTypes.some(t => tset.has(t));
+  const catTypes = categoryTypeSet(cat);
+  if (place?.primary_type && catTypes.has(place.primary_type)) return true;
+  const types = Array.isArray(place?.types) ? place.types : [];
+  return types.some(t => catTypes.has(t));
 }
 
 // Determine the PRIMARY category for a place. No name-based inference.
@@ -252,28 +312,27 @@ function belongsToCategory(place, cat) {
 // is resolved by Google's `primary_type` — no name regex.
 function primaryCategory(place) {
   const types = Array.isArray(place?.types) ? place.types : [];
-  const tset = new Set(types);
   const primaryType = place?.primary_type || null;
 
   // 1) Venue Events — STRICT primary_type (filters out restaurants tagged night_club)
-  if (findCat('venue-events').googleTypes.includes(primaryType)) return findCat('venue-events');
+  if (categoryTypeSet(findCat('venue-events')).has(primaryType)) return findCat('venue-events');
   // 2) Outdoors — lenient types[] match
-  if (findCat('outdoors').googleTypes.some(t => tset.has(t))) return findCat('outdoors');
+  if (types.some(t => categoryTypeSet(findCat('outdoors')).has(t))) return findCat('outdoors');
   // 3) Bars — lenient types[] match
-  if (findCat('bars').googleTypes.some(t => tset.has(t))) return findCat('bars');
+  if (types.some(t => categoryTypeSet(findCat('bars')).has(t))) return findCat('bars');
 
   // 4) Cafe vs Restaurant — use bucket config so any cafe-family type
   // (cafe, coffee_shop, etc) and any restaurant-family type (restaurant,
   // meal_takeaway, meal_delivery, fast_food_restaurant, fine_dining_restaurant,
   // brunch_restaurant, breakfast_restaurant) is matched consistently.
-  const cafesTypes = findCat('cafes').googleTypes;
-  const restTypes = findCat('restaurants').googleTypes;
-  const isCafe = cafesTypes.some(t => tset.has(t));
-  const isRest = restTypes.some(t => tset.has(t));
+  const cafesTypes = categoryTypeSet(findCat('cafes'));
+  const restTypes = categoryTypeSet(findCat('restaurants'));
+  const isCafe = types.some(t => cafesTypes.has(t));
+  const isRest = types.some(t => restTypes.has(t));
   if (isCafe && isRest) {
     // Both family tags present (Starbucks: coffee_shop + restaurant; McDonald's:
     // fast_food_restaurant + cafe sometimes). Google's primary_type decides.
-    return cafesTypes.includes(primaryType) ? findCat('cafes') : findCat('restaurants');
+    return cafesTypes.has(primaryType) ? findCat('cafes') : findCat('restaurants');
   }
   if (isCafe) return findCat('cafes');
   if (isRest) return findCat('restaurants');

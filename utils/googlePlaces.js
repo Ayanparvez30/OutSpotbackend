@@ -204,8 +204,9 @@ async function nearbyByDistance({ lat, lng, type, pagetoken }) {
 
 // searchNearby returns max 20 in one call — no pagination on this endpoint.
 // maxPages is preserved in signature for caller compat but ignored (single fetch).
-async function nearbyByDistanceAll({ lat, lng, type, radius, maxPages = 3 }) { // eslint-disable-line no-unused-vars
-  const j = await searchNearbyNew({ lat, lng, type, radius: radius || 16093, rank: 'POPULARITY' });
+// `rank` picks WHICH 20: the most popular, or the 20 nearest.
+async function nearbyByDistanceAll({ lat, lng, type, radius, rank = 'POPULARITY', maxPages = 3 }) { // eslint-disable-line no-unused-vars
+  const j = await searchNearbyNew({ lat, lng, type, radius: radius || 16093, rank });
   return (j.places || []).map(mapNewToLegacy).filter(Boolean);
 }
 
