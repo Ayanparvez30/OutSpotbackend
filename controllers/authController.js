@@ -1019,6 +1019,14 @@ exports.updateFcmToken = async (req, res) => {
   });
   const wasMissing = !user?.fcmToken;
 
+  // One device = one token. If another account still holds this token (previous
+  // login on the same device), detach it there — otherwise every notification
+  // for that stale account is also pushed to this device.
+  await prisma.user.updateMany({
+    where: { fcmToken, NOT: { id: userId } },
+    data: { fcmToken: null },
+  });
+
   await prisma.user.update({
     where: { id: userId },
     data: { fcmToken }

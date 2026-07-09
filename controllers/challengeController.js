@@ -11,7 +11,6 @@ const {
   checkDuplicateImage,
 } = require('../utils/challengeVerification');
 const { notifyNewChallenge } = require('../utils/challengeNotifications');
-const { notifyUser } = require('../utils/notificationService'); // Import notification service
 
 // ✅ weekly points single source of truth
 const {
@@ -77,49 +76,8 @@ exports.getChallengeCards = async (req, res) => {
   const daily = await getAssignedChallenge(prisma, userId, 'DAILY', zone, now);
   const weekly = await getAssignedChallenge(prisma, userId, 'WEEKLY', zone, now);
 
-    // Create notifications for assigned challenges if not already present
-    async function maybeNotify(assign, freq) {
-      if (!assign || !assign.challenge) return;
-      const challenge = assign.challenge;
-      const type = freq === 'DAILY' ? 'DAILY_CHALLENGE' : 'WEEKLY_CHALLENGE';
-      const today = new Date();
-      let start, end;
-      if (freq === 'DAILY') {
-        start = startOfDayInZone(today, zone);
-        end = endOfDayInZone(today, zone);
-      } else {
-        const week = getWeekStartEndInZone(today, zone);
-        start = week.startUTC;
-        end = week.endUTC;
-      }
-
-      // Add unique constraint check for notifications
-      const existing = await prisma.notification.findFirst({
-        where: {
-          userId,
-          type,
-          title: challenge.title,
-          createdAt: { gte: start, lte: end },
-        },
-      });
-
-      if (!existing) {
-        // Send push notification
-        await notifyUser(
-          userId,
-          type,
-            challenge.title,
-            challenge.description,
-            { challengeId: challenge.id }
-          );
-        }
-      }
-    
-
-    await Promise.all([
-      maybeNotify(daily, 'DAILY'),
-      maybeNotify(weekly, 'WEEKLY'),
-    ]);
+  // No notify here: getAssignedChallenge() already emits the per-window
+  // DAILY_CHALLENGE / WEEKLY_CHALLENGE notification exactly once.
 
   async function buildCard(assign, freq) {
     if (!assign || !assign.challenge) return null;

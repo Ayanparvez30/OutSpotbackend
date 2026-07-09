@@ -54,8 +54,26 @@ function seededPick(array, seedStr) {
   const idx = Math.floor(rand() * array.length);
   return array[idx];
 }
+// The "already notified?" read and the notify write are not atomic, so two
+// concurrent requests for the same user could both miss and both notify.
+// Serialize per user+window key; the guard below then sees the first write.
+const notifyLocks = new Map();
 async function maybeNotify(prisma, userId, assign, freq, zone) {
   if (!assign || !assign.challenge) return;
+  const lockKey = `${userId}:${freq}`;
+  const prev = notifyLocks.get(lockKey) || Promise.resolve();
+  const run = prev
+    .catch(() => {})
+    .then(() => notifyOnce(prisma, userId, assign, freq, zone));
+  notifyLocks.set(lockKey, run);
+  try {
+    await run;
+  } finally {
+    if (notifyLocks.get(lockKey) === run) notifyLocks.delete(lockKey);
+  }
+}
+
+async function notifyOnce(prisma, userId, assign, freq, zone) {
   const challenge = assign.challenge;
   const type = freq === 'DAILY' ? 'DAILY_CHALLENGE' : 'WEEKLY_CHALLENGE';
   const today = new Date();

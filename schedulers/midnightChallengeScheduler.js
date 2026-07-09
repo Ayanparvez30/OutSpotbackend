@@ -3,6 +3,7 @@
 
 const cron = require('node-cron');
 const { notifyUsersAboutMidnightChallenges } = require('../utils/midnightChallengeNotifier');
+const { resolveZone } = require('../utils/challenges');
 
 /**
  * Production scheduler for midnight challenge notifications
@@ -25,37 +26,17 @@ class MidnightChallengeScheduler {
 
     console.log('🌙 Starting midnight challenge notification scheduler...');
 
-    // Define timezone schedules (midnight in each timezone)
+    // One schedule only. `User` has no timezone column, so every user's
+    // challenge window is the app timezone — running a cron per US timezone
+    // notified *every* user once per zone, and the "already notified" guard
+    // could not catch it because each zone computes a different window start.
+    const appZone = resolveZone(null);
     const timezoneSchedules = [
       {
-        name: 'US Eastern Time',
-        timezone: 'America/New_York',
-        cron: '0 0 5 * * *', // 5 AM UTC = Midnight ET (UTC-5)
-        description: 'Midnight ET (UTC-5)'
-      },
-      {
-        name: 'US Central Time',
-        timezone: 'America/Chicago',
-        cron: '0 0 6 * * *', // 6 AM UTC = Midnight CT (UTC-6)
-        description: 'Midnight CT (UTC-6)'
-      },
-      {
-        name: 'US Mountain Time',
-        timezone: 'America/Denver',
-        cron: '0 0 7 * * *', // 7 AM UTC = Midnight MT (UTC-7)
-        description: 'Midnight MT (UTC-7)'
-      },
-      {
-        name: 'US Pacific Time',
-        timezone: 'America/Los_Angeles',
-        cron: '0 0 8 * * *', // 8 AM UTC = Midnight PT (UTC-8)
-        description: 'Midnight PT (UTC-8)'
-      },
-      {
-        name: 'UTC',
-        timezone: 'UTC',
-        cron: '0 0 0 * * *', // Midnight UTC
-        description: 'Midnight UTC'
+        name: 'App timezone',
+        timezone: appZone,
+        cron: '0 0 0 * * *', // midnight in the app timezone
+        description: `Midnight ${appZone}`
       }
     ];
 
@@ -81,7 +62,7 @@ class MidnightChallengeScheduler {
         }
       }, {
         scheduled: false, // Don't start immediately
-        timezone: 'UTC' // Run the cron job in UTC
+        timezone: schedule.timezone
       });
 
       this.scheduledJobs.set(schedule.timezone, {

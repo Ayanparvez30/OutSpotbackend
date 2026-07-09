@@ -66,7 +66,17 @@ async function notifyUser(userId, type, title, description, data = {}) {
         await admin.messaging().send(message);
         console.log(`✅ Push sent to user ${userId}`);
       } catch (fcmError) {
-        console.log(`⚠️ FCM delivery failed for user ${userId}:`, fcmError.message);
+        // Token invalid = app uninstalled or token expired → clear it
+        if (fcmError.code === 'messaging/registration-token-not-registered' ||
+            fcmError.code === 'messaging/invalid-registration-token') {
+          await prisma.user.update({
+            where: { id: userId },
+            data: { fcmToken: null },
+          });
+          console.log(`🧹 Cleared stale FCM token for user ${userId}`);
+        } else {
+          console.log(`⚠️ FCM delivery failed for user ${userId}:`, fcmError.message);
+        }
         console.log(`   Notification still saved to database`);
       }
     } else if (user && user.notificationEnabled === false) {
