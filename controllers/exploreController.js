@@ -1,6 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, textSearch, photoUrlByRef } = require('../utils/googlePlaces');
+const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, detailsCached, textSearch, textSearchAll, photoUrlByRef } = require('../utils/googlePlaces');
 const { addPointsWithMultiplier } = require('../utils/points');
 const { pointsForPlace } = require('../utils/pointsForPlace');
 const uploadToS3 = require('../utils/s3Upload');
@@ -28,6 +28,18 @@ const DUP_WINDOW_HOURS      = Number(process.env.EXPLORE_DUP_WINDOW_HOURS       
 // back-to-back calls because next_page_token retries don't always saturate.
 const CATEGORY_CACHE = new Map(); // key -> { ts, candidates }
 const CATEGORY_CACHE_TTL_MS = 5 * 60 * 1000;
+// Every distinct (category, 110m cell) pins a pool of place objects forever
+// otherwise — one process serving a whole city grows without bound.
+const CATEGORY_CACHE_MAX = Number(process.env.EXPLORE_CATEGORY_CACHE_MAX || 500);
+function sweepCategoryCache() {
+  const now = Date.now();
+  for (const [k, v] of CATEGORY_CACHE) {
+    if (now - v.ts >= CATEGORY_CACHE_TTL_MS) CATEGORY_CACHE.delete(k);
+  }
+  while (CATEGORY_CACHE.size >= CATEGORY_CACHE_MAX) {
+    CATEGORY_CACHE.delete(CATEGORY_CACHE.keys().next().value); // oldest insert
+  }
+}
 function categoryCacheKey(catKey, lat, lng) {
   // Round to 3 decimals (~110m) so close GPS reads hit the same cache slot.
   // Radius is NOT part of the key — Flutter's /restaurants call omits radius
@@ -70,6 +82,7 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
   const key = categoryCacheKey(cat.key, lat, lng);
   let entry = CATEGORY_CACHE.get(key);
   if (!entry || Date.now() - entry.ts >= CATEGORY_CACHE_TTL_MS) {
+    sweepCategoryCache();
     entry = {
       ts: Date.now(),
       sortedPool: [],            // append-only — position locked once a place lands here
@@ -85,12 +98,15 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
   // Filter, score & append a freshly-fetched batch to sortedPool. New places
   // are sorted WITHIN the batch then concatenated — once positioned, a place
   // never moves. Guarantees zero duplicates across paginated requests.
-  const appendBatch = (places) => {
+  //
+  // `trusted` = the batch came from one of THIS category's own text queries, so
+  // membership is already established by the query itself (a "paintball" result
+  // has types like amusement_center that no bucket lists).
+  const appendBatch = (places, { trusted = false } = {}) => {
     const fresh = [];
     for (const p of places) {
       if (!p?.place_id || entry.seenIds.has(p.place_id)) continue;
-      const primary = primaryCategory(p);
-      if (!primary || primary.key !== cat.key) continue;
+      if (!trusted && !belongsToCategory(p, cat)) continue;
       if (!p.geometry?.location) continue;
       const distMeters = haversineMeters({ lat, lng }, p.geometry.location);
       if (metersToMiles(distMeters) > radiusMiles) continue;
@@ -116,7 +132,10 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
       for (const t of cat.googleTypes) {
         tasks.push(
           nearbyByDistanceAll({ lat: c.lat, lng: c.lng, type: t, radius: c.radius })
-            .catch(() => [])
+            // A swallowed rejection here is indistinguishable from "Google has no
+            // such places", which is how quota/network failures used to surface as
+            // silently short card lists. Log, then degrade.
+            .catch((e) => { console.error(`[explore] nearby ${cat.key}/${t}@${cellName} failed:`, e.message); return []; })
             .then(places => ({ cellName, places }))
         );
       }
@@ -130,30 +149,35 @@ async function getCategoryCandidates({ cat, lat, lng, radius, requiredCount = 10
     appendBatch(batch);
   }
 
-  // Stage 4: searchText queries (sequential, Google rate-limits).
+  // Stage 4: searchText queries. Run in parallel and follow nextPageToken —
+  // one page of 20 barely covers a single card page.
   if (entry.sortedPool.length < requiredCount && Array.isArray(cat.textQueries)) {
-    for (const q of cat.textQueries) {
-      if (entry.sortedPool.length >= requiredCount) break;
-      if (entry.textQueriesLoaded.has(q)) continue;
-      try {
-        const places = await textSearch({ query: q, lat, lng, radius });
-        entry.textQueriesLoaded.add(q);
-        appendBatch(places);
-      } catch (_) { /* skip on error */ }
-    }
+    const pending = cat.textQueries.filter(q => !entry.textQueriesLoaded.has(q));
+    const batches = await Promise.all(pending.map(q =>
+      textSearchAll({ query: q, lat, lng, radius, maxPages: 2 })
+        .then(places => { entry.textQueriesLoaded.add(q); return places; })
+        .catch((e) => { console.error(`[explore] textSearch "${q}" failed:`, e.message); return []; })
+    ));
+    for (const places of batches) appendBatch(places, { trusted: true });
   }
 
   return entry.sortedPool;
 }
 
-// Priority order matters. Walk top-down — first match wins.
-// A Starbucks tagged ['cafe','food','restaurant'] hits Cafes first → primary=Cafes,
-// excluded from Restaurants results. A pub tagged ['bar','restaurant'] → primary=Bars.
+// Bucket definitions. `googleTypes` drives BOTH the searchNearby fetch and the
+// membership test (belongsToCategory) — a place is in the bucket when Google
+// tags it with one of these types.
+//
+// textQueries: prefer plain nouns. searchText matches the query against place
+// NAMES as well as relevance, so an adjective narrows it to places literally
+// called that: in Boston "popular restaurants" returns 2 results while
+// "restaurants" returns 20 + a nextPageToken. Only keep an adjective when it
+// names a real cuisine/venue kind ("fine dining", "irish pubs").
 // Points removed from each bucket — per-place dynamic via pointsForPlace().
 const CATEGORIES = [
   { key: 'venue-events', title: 'Venue Events', icon: '🎤', imageKey: 'venue-events',
     googleTypes: ['night_club', 'karaoke', 'comedy_club', 'live_music_venue', 'concert_hall', 'performing_arts_theater'],
-    textQueries: ['popular nightclubs', 'karaoke bars', 'comedy clubs', 'concerts near me', 'live music venues'] },
+    textQueries: ['live music venues', 'nightclubs', 'karaoke bars', 'comedy clubs', 'concert venues'] },
   { key: 'outdoors',     title: 'Outdoors',     icon: '🌳', imageKey: 'outdoors',
     googleTypes: [
       'park', 'campground', 'tourist_attraction', 'hiking_area', 'national_park', 'botanical_garden', 'beach',
@@ -161,16 +185,18 @@ const CATEGORIES = [
       'bowling_alley', 'aquarium', 'zoo', 'marina', 'amusement_park',
     ],
     // Only text queries for activities Places API doesn't expose as supported types.
-    textQueries: ['paintball near me', 'go karting near me', 'boating near me'] },
+    textQueries: ['paintball', 'go karting', 'boating', 'hiking trails'] },
   { key: 'bars',         title: 'Bars',         icon: '🍻', imageKey: 'bars',
     googleTypes: ['bar', 'pub', 'wine_bar', 'bar_and_grill'],
-    textQueries: ['popular bars', 'irish pubs', 'cocktail bars'] },
+    textQueries: ['bars', 'irish pubs', 'cocktail bars'] },
   { key: 'cafes',        title: 'Cafes',        icon: '☕', imageKey: 'cafes',
-    googleTypes: ['cafe', 'coffee_shop'],
-    textQueries: ['best coffee shops', 'popular cafes'] },
+    // `bakery` earns its place: Tatte, Flour Bakery + Cafe and L.A. Burdick are
+    // tagged bakery+restaurant, never `cafe`, so a cafe-only list omitted them.
+    googleTypes: ['cafe', 'coffee_shop', 'bakery', 'tea_house'],
+    textQueries: ['coffee shops', 'cafes', 'bakeries'] },
   { key: 'restaurants',  title: 'Restaurants',  icon: '🍽️', imageKey: 'restaurants',
     googleTypes: ['restaurant', 'meal_takeaway', 'meal_delivery', 'fast_food_restaurant', 'fine_dining_restaurant', 'brunch_restaurant', 'breakfast_restaurant'],
-    textQueries: ['popular restaurants', 'best restaurants', 'fine dining'] },
+    textQueries: ['restaurants', 'best restaurants', 'fine dining'] },
 ];
 
 function findCat(key) { return CATEGORIES.find(c => c.key === key); }
@@ -184,7 +210,9 @@ async function getTrendingCandidates({ lat, lng, radius }) {
   const hit = CATEGORY_CACHE.get(cacheKey);
   if (hit && Date.now() - hit.ts < CATEGORY_CACHE_TTL_MS) return hit.sortedPool;
 
-  const raw = await textSearch({ query: 'trending places near me', lat, lng, radius });
+  // Paginated: a single searchText page caps at 20, which left page 2 of the
+  // trending list empty.
+  const raw = await textSearchAll({ query: 'trending places near me', lat, lng, radius, maxPages: 3 });
   const radiusMiles = metersToMiles(radius);
   const sortedPool = [];
   for (const p of (raw || [])) {
@@ -197,8 +225,24 @@ async function getTrendingCandidates({ lat, lng, radius }) {
   // Preserve Google's trending order — DO NOT re-sort. Google's ranking already
   // reflects "trending" signals we don't have access to. Hybrid score kept only
   // as a tiebreaker if a UI ever needs it.
+  sweepCategoryCache();
   CATEGORY_CACHE.set(cacheKey, { ts: Date.now(), sortedPool });
   return sortedPool;
+}
+
+// Membership test for a category's card list. A place belongs when Google tags
+// it with one of the bucket's types — the exact signal we searched on.
+//
+// This is deliberately NON-exclusive, unlike primaryCategory() below. Bucketing
+// each place into exactly one category discarded 39-46% of the places Google had
+// already returned for that category: a restaurant search surfaced Cheers and
+// Time Out Market, then re-bucketed them to Bars, so they vanished from the
+// Restaurants cards while still showing up in search. Overlap is the truth —
+// Cheers really is both a bar and a restaurant.
+function belongsToCategory(place, cat) {
+  if (place?.primary_type && cat.googleTypes.includes(place.primary_type)) return true;
+  const tset = new Set(Array.isArray(place?.types) ? place.types : []);
+  return cat.googleTypes.some(t => tset.has(t));
 }
 
 // Determine the PRIMARY category for a place. No name-based inference.
@@ -850,7 +894,7 @@ exports.searchPlaces = async (req, res) => {
     // render search results with the SAME widget it uses for the category grid.
     const restaurants = await Promise.all(top.map(async (p) => {
       let d = null;
-      try { d = await details(p.place_id); } catch (_) {}
+      try { d = await detailsCached(p.place_id); } catch (_) {}
       const photos = buildPhotosArray(d, 8);
       const image = photos[0] || photoUrlByRef(p.photos?.[0]?.photo_reference, 4800) || '';
       const matched = primaryCategory(d || p);
@@ -967,9 +1011,11 @@ exports.getRestaurantsByCategory = async (req, res) => {
         const placeId = p.place_id;
 
         // ✅ Full details for every item in list (আপনার চাওয়া অনুযায়ী)
+        // Memoized — a page of 20 cards used to cost 20 Details calls, re-paid on
+        // every scroll and by every user browsing the same neighbourhood.
         let d = null;
         try {
-          d = await details(placeId);
+          d = await detailsCached(placeId);
         } catch (err) {
           d = null;
         }
@@ -983,7 +1029,8 @@ exports.getRestaurantsByCategory = async (req, res) => {
         const lat2 = p.geometry?.location?.lat ?? d?.geometry?.location?.lat ?? 0;
         const lng2 = p.geometry?.location?.lng ?? d?.geometry?.location?.lng ?? 0;
 
-        const openNow = d?.opening_hours?.open_now ?? p.opening_hours?.open_now;
+        // Search result first: `d` is cached for hours, but open_now is live.
+        const openNow = p.opening_hours?.open_now ?? d?.opening_hours?.open_now;
         const status = openNowToStatus(openNow);
 
         return {
@@ -1077,13 +1124,14 @@ async function _renderTrendingRestaurants(req, res, lat, lng, radius) {
   const restaurants = await Promise.all(top.map(async (p) => {
     const placeId = p.place_id;
     let d = null;
-    try { d = await details(placeId); } catch (_) { d = null; }
+    try { d = await detailsCached(placeId); } catch (_) { d = null; }
 
     const photos = buildPhotosArray(d, 8);
     const image = photos[0] || photoUrlByRef(p.photos?.[0]?.photo_reference, 4800) || '';
     const lat2 = p.geometry?.location?.lat ?? d?.geometry?.location?.lat ?? 0;
     const lng2 = p.geometry?.location?.lng ?? d?.geometry?.location?.lng ?? 0;
-    const openNow = d?.opening_hours?.open_now ?? p.opening_hours?.open_now;
+    // Search result first: `d` is cached for hours, but open_now is live.
+    const openNow = p.opening_hours?.open_now ?? d?.opening_hours?.open_now;
     // Points from Google price_level + reviews (per launch spec).
     const points = pointsForPlace({
       priceLevel: d?.price_level ?? p.price_level,
@@ -1266,9 +1314,10 @@ const grouped = await prisma.locationPoint.groupBy({
       const dMeters = haversineMeters(here, { lat: last.latitude, lng: last.longitude });
       if (dMeters > radius) continue;
 
-      // Google details for proper address/phone/website/photo
+      // Google details for proper address/phone/website/photo (memoized — this
+      // loop is sequential, one Details call per post otherwise)
       let d = null;
-      try { d = await details(placeId); } catch (e) { d = null; }
+      try { d = await detailsCached(placeId); } catch (e) { d = null; }
 
       const photoRef = d?.photos?.[0]?.photo_reference || null;
 

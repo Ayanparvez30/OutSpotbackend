@@ -70,11 +70,14 @@ require.cache[googlePlacesPath] = {
   id: googlePlacesPath, filename: googlePlacesPath, loaded: true,
   exports: {
     details: (...args) => detailsImpl(...args),
+    detailsCached: (...args) => detailsImpl(...args),
     nearbyPage: async () => ({ results: stubNearbyReturn, next_page_token: null }),
     nearbyAll: async () => stubNearbyReturn,
     nearbyByDistance: async () => stubNearbyReturn,
     nearbyByDistanceAll: async () => stubNearbyReturn,
     textSearch: async () => stubTextReturn,
+    textSearchPage: async () => ({ results: stubTextReturn, nextPageToken: null }),
+    textSearchAll: async () => stubTextReturn,
     photoUrlByRef: (ref) => ref ? `photo://${ref}` : '',
   },
 };
