@@ -668,13 +668,17 @@ model ShopItem {
   payload         Json? // e.g. { "shirt": "Blue Hawaiian" }
   isFeatured      Boolean  @default(false)
   gender          String? // 'masculine' | 'feminine' | null (null = both)
-  // Explicit free/paid flag. Previously free was inferred as "both store SKUs
-  // null", but all paid cosmetics now share ONE store SKU (bought via itemId),
-  // so per-item SKUs are null for paid items too — inference no longer works.
-  // isFree is the single source of truth for the app's free vs paid catalog.
+  // Explicit free/paid flag — the single source of truth for the app's free vs
+  // paid catalog. Free was previously inferred as "both store SKUs null", which
+  // no longer holds (see below).
   isFree          Boolean  @default(false)
-  appleProductId  String?  @unique // legacy per-item SKU (unused by shared-SKU flow)
-  googleProductId String?  @unique // legacy per-item SKU (unused by shared-SKU flow)
+  // Store SKU the app buys for this item. All PAID cosmetics now carry the SAME
+  // shared consumable SKU ("item_unlock_299"); the app reads this off the
+  // catalog and purchases it (server-driven — no hard-coded SKU in the app).
+  // Free items leave these null. NOT @unique any more: many items share one SKU.
+  // ShopItem is only ever looked up by id, never by SKU, so uniqueness is unused.
+  appleProductId  String?
+  googleProductId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

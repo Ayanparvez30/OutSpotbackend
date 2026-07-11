@@ -2,6 +2,13 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const uploadToS3 = require('../../utils/s3Upload');
 
+// All paid cosmetics share ONE store SKU. The catalog serves this to the app,
+// which buys it (server-driven). Admin never types a per-item SKU — paid items
+// get this automatically, free items get null. Env-overridable; same value on
+// both platforms in our setup.
+const SHARED_ITEM_SKU_APPLE  = process.env.IAP_ITEM_SKU_APPLE  || 'item_unlock_299';
+const SHARED_ITEM_SKU_GOOGLE = process.env.IAP_ITEM_SKU_GOOGLE || 'item_unlock_299';
+
 const GENDER_SLOTS = {
   masculine: ['TOP', 'BOTTOM', 'SHOES', 'GLASSES', 'WATCH'],
   feminine:  ['TOP', 'BOTTOM', 'SHOES', 'GLASSES', 'WATCH', 'PURSE', 'ORNAMENT', 'MAKEUP'],
@@ -107,10 +114,10 @@ exports.createItem = async (req, res) => {
           isFeatured: free ? false : (isFeatured === 'on'),
           gender: g,
           // Explicit free/paid flag drives the app catalog now. Paid cosmetics
-          // no longer need a per-item store SKU — they use the one shared SKU.
+          // all carry the shared SKU (server-driven purchase); free items null.
           isFree: free,
-          appleProductId: free ? null : (appleId || null),
-          googleProductId: free ? null : (googleId || null),
+          appleProductId: free ? null : SHARED_ITEM_SKU_APPLE,
+          googleProductId: free ? null : SHARED_ITEM_SKU_GOOGLE,
         },
       });
     }
@@ -184,8 +191,8 @@ exports.updateItem = async (req, res) => {
         isFeatured: free ? false : (isFeatured === 'on'),
         gender,
         isFree: free,
-        appleProductId: free ? null : (appleProductId || null),
-        googleProductId: free ? null : (googleProductId || null),
+        appleProductId: free ? null : SHARED_ITEM_SKU_APPLE,
+        googleProductId: free ? null : SHARED_ITEM_SKU_GOOGLE,
       },
     });
     req.flash('success', 'Item updated.');
