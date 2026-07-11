@@ -187,16 +187,21 @@ async function uploadAvatarWithMulter(req, res) {
 async function generateMinime(req, res) {
   try {
     const userId = req.authData.id;
-    const { premadeId, bodyType, bodyShapeUrl, shirt, pant, shoes, glasses, lipstick, jewelry, bag, watch } = req.body || {};
+    const { premadeId, faceSource, bodyType, bodyShapeUrl, shirt, pant, shoes, glasses, lipstick, jewelry, bag, watch } = req.body || {};
 
-    // Resolve face reference: User.selfieUrl (real face) > premadeId > last Minime selfieUrl
+    // Face reference is chosen by the caller-declared source, not by "selfie
+    // always wins". This lets a user with an existing selfie switch to a premade.
+    //   faceSource='premade' → the given premade  (even if a selfie exists)
+    //   faceSource='selfie'  → User.selfieUrl
+    //   (omitted)            → legacy fallback: selfie > premade > last Minime
+    const source = String(faceSource || '').toLowerCase();
     const userRecord = await prisma.user.findUnique({ where: { id: userId }, select: { selfieUrl: true } });
     let faceRef;
 
-    if (userRecord?.selfieUrl) {
-      // Always prefer the canonical selfie (real face) if available
-      faceRef = userRecord.selfieUrl;
-    } else if (premadeId) {
+    if (source === 'premade' || (!source && !userRecord?.selfieUrl && premadeId)) {
+      if (!premadeId) {
+        return response.response_with_code(res, 400, 'premadeId required when faceSource is premade');
+      }
       const premade = await prisma.premadeAvatar.findUnique({
         where: { id: parseInt(premadeId, 10) },
       });
@@ -204,6 +209,10 @@ async function generateMinime(req, res) {
         return response.response_with_code(res, 400, 'Premade avatar not found or inactive');
       }
       faceRef = premade.imageUrl;
+    } else if (source === 'selfie') {
+      faceRef = userRecord?.selfieUrl || null;
+    } else if (userRecord?.selfieUrl) {
+      faceRef = userRecord.selfieUrl;
     } else {
       const last = await prisma.minime.findFirst({
         where: { userId },
@@ -236,7 +245,10 @@ async function generateMinime(req, res) {
       },
     });
 
-    const opts = {};
+    // Pass the resolved face as opts.faceUrl — its the highest priority in
+    // renderCurrentMinime, so a premade choice is not overridden by an existing
+    // User.selfieUrl at render time.
+    const opts = { faceUrl: faceRef };
     if (bodyType) opts.bodyType = bodyType;
     if (bodyShapeUrl) opts.bodyShapeUrl = bodyShapeUrl;
 
@@ -304,7 +316,11 @@ async function regenerateMinime(req, res) {
       });
     }
 
-    const opts = { targetMinimeId: draft.id };
+    // Preserve whatever face the draft was built with (selfie OR premade) by
+    // passing it as opts.faceUrl. Without this, renderCurrentMinime would prefer
+    // User.selfieUrl and silently revert a premade choice back to the selfie.
+    const faceToUse = draft.selfieUrl || faceRef;
+    const opts = { targetMinimeId: draft.id, faceUrl: faceToUse };
     if (bodyType) opts.bodyType = bodyType;
     if (bodyShapeUrl) opts.bodyShapeUrl = bodyShapeUrl;
     const rendered = await renderCurrentMinime(userId, opts);
