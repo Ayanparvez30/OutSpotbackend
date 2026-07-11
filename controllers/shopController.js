@@ -359,13 +359,17 @@ exports.getActiveMultiplier = async (req, res) => {
 
 /**
  * Confirm IAP and grant entitlement.
- * Body: { platform: 'apple'|'google', productId: string, receipt: string, type: 'multiplier'|'item', itemId?: number, applyNow?: boolean }
+ * Body: { platform: 'apple'|'google', productId: string, receipt: string,
+ *         transactionId?: string,  // per-purchase store id (StoreKit txn id /
+ *                                  // Play purchaseToken) — used for dedup; REQUIRED
+ *                                  // on iOS (cumulative app receipt can't dedup)
+ *         type: 'multiplier'|'item', itemId?: number, applyNow?: boolean }
  */
 exports.confirmIAPPurchase = async (req, res) => {
   const userId = req.authData.id;
 
-  // ✅ slot added (optional)
-  const { platform, productId, receipt, type, itemId, applyNow, slot } = req.body || {};
+  // ✅ slot added (optional); transactionId = per-purchase store id (see below)
+  const { platform, productId, receipt, transactionId, type, itemId, applyNow, slot } = req.body || {};
 
   try {
     // ------------------ Basic validations ------------------
@@ -399,6 +403,14 @@ exports.confirmIAPPurchase = async (req, res) => {
       });
     }
 
+    // Dedup / idempotency key. iOS sends a CUMULATIVE app receipt (the same blob
+    // grows with every purchase), so the receipt string cannot distinguish two
+    // purchases — with one shared SKU the productId is identical too. Dedup MUST
+    // use the store's PER-TRANSACTION id, which the app sends as `transactionId`
+    // (StoreKit transactionIdentifier on iOS, purchaseToken on Android). Fall
+    // back to the verifier-derived id only for older clients that don't send one.
+    const dedupTxId = (transactionId && String(transactionId).trim()) || verified.transactionId;
+
     // ------------------ MULTIPLIER ------------------
     if (type === 'multiplier') {
       // Platform-specific lookup with legacy fallback
@@ -419,7 +431,7 @@ exports.confirmIAPPurchase = async (req, res) => {
       // ✅ idempotency by receiptTxId
       const existing = await prisma.activeMultiplier
         .findUnique({
-          where: { userId_receiptTxId: { userId, receiptTxId: verified.transactionId } },
+          where: { userId_receiptTxId: { userId, receiptTxId: dedupTxId } },
         })
         .catch(() => null);
 
@@ -435,7 +447,7 @@ exports.confirmIAPPurchase = async (req, res) => {
           endsAt,
           source: 'IAP',
           productId: mp.productId,
-          receiptTxId: verified.transactionId,
+          receiptTxId: dedupTxId,
         },
       });
 
@@ -472,9 +484,13 @@ exports.confirmIAPPurchase = async (req, res) => {
       }
 
       // ── Single-use transaction binding ──
-      // One verified store transaction unlocks exactly ONE item. receiptTxId is
-      // UNIQUE on ItemPurchase, so replaying the same $2.99 receipt with a
-      // different itemId hits P2002 and is rejected — the core anti-abuse guard.
+      // One store transaction unlocks exactly ONE item. dedupTxId is the store's
+      // per-transaction id (unique per purchase on both platforms), so each
+      // cosmetic purchase is distinct — buying a shirt then a pant are two
+      // different transactions. Replaying the SAME transaction against a
+      // different itemId hits the receiptTxId unique index (P2002) and is
+      // rejected. (Using the cumulative iOS receipt string here would falsely
+      // collide every purchase — that was the "already used" bug.)
       try {
         await prisma.itemPurchase.create({
           data: {
@@ -483,7 +499,7 @@ exports.confirmIAPPurchase = async (req, res) => {
             productId,
             platform,
             priceUsd: item.priceUsd ?? 0,
-            receiptTxId: verified.transactionId,
+            receiptTxId: dedupTxId,
           },
         });
       } catch (e) {
@@ -491,7 +507,7 @@ exports.confirmIAPPurchase = async (req, res) => {
           // txId already spent. If it unlocked THIS same item, treat as a
           // harmless retry; if it was for a different item, it's a replay abuse.
           const prior = await prisma.itemPurchase.findUnique({
-            where: { receiptTxId: verified.transactionId },
+            where: { receiptTxId: dedupTxId },
             select: { itemId: true },
           });
           if (!prior || prior.itemId !== item.id) {

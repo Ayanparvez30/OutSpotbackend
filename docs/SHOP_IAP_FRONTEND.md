@@ -147,21 +147,31 @@ Request body:
 |---|---|---|---|
 | `platform` | string | ✅ | `"google"` or `"apple"` |
 | `productId` | string | ✅ | The SKU you bought — i.e. the catalog item's `googleProductId`/`appleProductId` (= `"item_unlock_299"`) |
-| `receipt` | string | ✅ | Android: the `purchaseToken`. iOS: the transaction receipt / token. |
+| `receipt` | string | ✅ | Android: the `purchaseToken`. iOS: the transaction receipt. |
+| `transactionId` | string | ✅ **(required on iOS)** | The **per-purchase** store transaction id — `purchaseDetails.purchaseID`. Unique for every purchase (shirt = one id, pant = another). This is what the backend dedups on. |
 | `type` | string | ✅ | `"item"` |
 | `itemId` | int | ✅ | The catalog item `id` the user is unlocking |
 | `applyNow` | bool | optional | `true` = also equip it onto the mini-me immediately |
+
+> **⚠️ Why `transactionId` is required (fixes the iOS "This purchase was already used" bug):**
+> On iOS, `receipt` is the **cumulative app receipt** — the same blob grows with
+> every purchase, so it can't tell two purchases apart. With one shared SKU the
+> `productId` is identical too. The backend therefore dedups on `transactionId`
+> (unique per purchase). Send `purchaseDetails.purchaseID` — without it, the 2nd
+> cosmetic on iOS is wrongly rejected as "already used". (Android's `purchaseToken`
+> is already per-purchase, so send it as `transactionId` too for consistency.)
 
 Example:
 
 ```json
 {
-  "platform":  "google",
-  "productId": "item_unlock_299",
-  "receipt":   "<purchaseToken>",
-  "type":      "item",
-  "itemId":    402,
-  "applyNow":  true
+  "platform":      "apple",
+  "productId":     "item_unlock_299",
+  "receipt":       "<app receipt>",
+  "transactionId": "<purchaseDetails.purchaseID — unique per purchase>",
+  "type":          "item",
+  "itemId":        402,
+  "applyNow":      true
 }
 ```
 
@@ -273,8 +283,8 @@ Errors:
 **Shop (Part 1):** — the SKU is server-driven; the real app work is the consumable + 409.
 - [ ] **Buy the cosmetic product as a CONSUMABLE and consume/finish it after every purchase.** (If cosmetics are currently non-consumable, this is the key change — else the 2nd purchase is blocked by the store.)
 - [ ] Keep reading the product id off the catalog item (`googleProductId`/`appleProductId`) and buy that — it's now the shared SKU. No hard-coding, no SKU logic change.
-- [ ] `POST /shop/iap/confirm` with `type:"item"`, the catalog `itemId`, and the productId you bought (unchanged call shape).
-- [ ] Handle `409 "This purchase was already used"` (never retry the same receipt).
+- [ ] `POST /shop/iap/confirm` with `type:"item"`, the catalog `itemId`, the productId you bought, **and `transactionId` = `purchaseDetails.purchaseID`** (REQUIRED on iOS — fixes the "already used" bug; send on Android too).
+- [ ] Handle `409 "This purchase was already used"` (a genuine replay of the same transaction — never retry the same transactionId).
 - [ ] Show price from the shared store product's localized price (all cosmetics = $2.99).
 - [ ] Leave the multiplier purchase flow unchanged.
 

@@ -81,8 +81,10 @@ function makeRes() {
   res.json = (b) => { res.body = b; return res; };
   return res;
 }
-async function buy({ receipt, itemId, platform = 'google' }) {
-  const req = { authData: { id: 7 }, body: { platform, productId: 'item_unlock_299', receipt, type: 'item', itemId } };
+async function buy({ receipt, itemId, platform = 'google', transactionId }) {
+  const body = { platform, productId: 'item_unlock_299', receipt, type: 'item', itemId };
+  if (transactionId) body.transactionId = transactionId;
+  const req = { authData: { id: 7 }, body };
   const res = makeRes();
   await shop.confirmIAPPurchase(req, res);
   return res;
@@ -127,6 +129,20 @@ async function buy({ receipt, itemId, platform = 'google' }) {
   ok('apple fresh receipt → granted', res.statusCode === 200 && inventory.has('7:1'));
   res = await buy({ receipt: 'rcpt-A', itemId: 2, platform: 'apple' });
   ok('apple replay different item → 409', res.statusCode === 409);
+
+  // 8) iOS CUMULATIVE receipt — the real-world bug. Same app-receipt string for
+  //    every purchase, but the app sends a distinct per-transaction id. Dedup
+  //    must key on transactionId, so shirt then pant BOTH succeed.
+  resetDb();
+  const iosReceipt = 'IOS-CUMULATIVE-APP-RECEIPT-BLOB';
+  res = await buy({ platform: 'apple', receipt: iosReceipt, transactionId: 'txn-1', itemId: 1 });
+  ok('iOS shirt (txn-1) → 200', res.statusCode === 200 && inventory.has('7:1'), `status=${res.statusCode}`);
+  res = await buy({ platform: 'apple', receipt: iosReceipt, transactionId: 'txn-2', itemId: 2 });
+  ok('iOS pant, SAME receipt, new txn-2 → 200 (no false "already used")', res.statusCode === 200 && inventory.has('7:2'), `status=${res.statusCode}`);
+  ok('  two ItemPurchase rows', itemPurchases.filter(r => r.userId === 7).length === 2);
+  // Replaying the SAME transactionId against a different item is still blocked.
+  res = await buy({ platform: 'apple', receipt: iosReceipt, transactionId: 'txn-1', itemId: 2 });
+  ok('iOS replay SAME txn-1, different item → 409', res.statusCode === 409, `status=${res.statusCode}`);
 
   console.log('\n========================================');
   console.log(`Result: ${PASS} passed, ${FAIL} failed`);
