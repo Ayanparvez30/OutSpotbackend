@@ -442,6 +442,50 @@ exports.confirmIAPPurchase = async (req, res) => {
         });
       }
 
+      // ── Optional shared-SKU guard ──
+      // All cosmetics share ONE $2.99 consumable store SKU. When the shared SKU
+      // is configured, reject any productId that isn't it, so a receipt bought
+      // against some other/cheaper SKU can't unlock a cosmetic. Left unset =
+      // accept any productId (back-compat with per-item SKUs).
+      const sharedSku = platform === 'apple'
+        ? process.env.IAP_ITEM_SKU_APPLE
+        : process.env.IAP_ITEM_SKU_GOOGLE;
+      if (sharedSku && productId !== sharedSku) {
+        return res.status(400).json({ success: false, message: 'Invalid product for item purchase' });
+      }
+
+      // ── Single-use transaction binding ──
+      // One verified store transaction unlocks exactly ONE item. receiptTxId is
+      // UNIQUE on ItemPurchase, so replaying the same $2.99 receipt with a
+      // different itemId hits P2002 and is rejected — the core anti-abuse guard.
+      try {
+        await prisma.itemPurchase.create({
+          data: {
+            userId,
+            itemId: item.id,
+            productId,
+            platform,
+            priceUsd: item.priceUsd ?? 0,
+            receiptTxId: verified.transactionId,
+          },
+        });
+      } catch (e) {
+        if (e.code === 'P2002') {
+          // txId already spent. If it unlocked THIS same item, treat as a
+          // harmless retry; if it was for a different item, it's a replay abuse.
+          const prior = await prisma.itemPurchase.findUnique({
+            where: { receiptTxId: verified.transactionId },
+            select: { itemId: true },
+          });
+          if (!prior || prior.itemId !== item.id) {
+            return res.status(409).json({ success: false, message: 'This purchase was already used' });
+          }
+          // same item → fall through to idempotent inventory upsert below
+        } else {
+          throw e;
+        }
+      }
+
       // ✅ add to inventory (idempotent)
       const inv = await prisma.userInventory.upsert({
         where: { userId_itemId: { userId, itemId: item.id } },
@@ -669,7 +713,7 @@ exports.getCatalog = async (req, res) => {
 
     const items = await prisma.shopItem.findMany({
       where: {
-        OR: [{ appleProductId: { not: null } }, { googleProductId: { not: null } }],
+        isFree: false,
         gender,
       },
       orderBy: [{ isFeatured: 'desc' }, { slot: 'asc' }, { name: 'asc' }],
@@ -681,6 +725,7 @@ exports.getCatalog = async (req, res) => {
         imageUrl: true,
         isFeatured: true,
         gender: true,
+        priceUsd: true,
         appleProductId: true,
         googleProductId: true,
       },
@@ -709,8 +754,7 @@ exports.getCatalogFree = async (req, res) => {
 
     const items = await prisma.shopItem.findMany({
       where: {
-        appleProductId: null,
-        googleProductId: null,
+        isFree: true,
         gender,
       },
       orderBy: [{ slot: 'asc' }, { createdAt: 'desc' }],
@@ -740,13 +784,13 @@ exports.getCatalogPaid = async (req, res) => {
 
     const items = await prisma.shopItem.findMany({
       where: {
-        OR: [{ appleProductId: { not: null } }, { googleProductId: { not: null } }],
+        isFree: false,
         gender,
       },
       orderBy: [{ isFeatured: 'desc' }, { slot: 'asc' }, { name: 'asc' }],
       select: {
         id: true, slot: true, name: true, brand: true, imageUrl: true,
-        isFeatured: true, gender: true, appleProductId: true, googleProductId: true,
+        isFeatured: true, gender: true, priceUsd: true, appleProductId: true, googleProductId: true,
       },
     });
 

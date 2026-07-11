@@ -106,6 +106,9 @@ exports.createItem = async (req, res) => {
           imageUrl: finalImageUrl,
           isFeatured: free ? false : (isFeatured === 'on'),
           gender: g,
+          // Explicit free/paid flag drives the app catalog now. Paid cosmetics
+          // no longer need a per-item store SKU — they use the one shared SKU.
+          isFree: free,
           appleProductId: free ? null : (appleId || null),
           googleProductId: free ? null : (googleId || null),
         },
@@ -180,6 +183,7 @@ exports.updateItem = async (req, res) => {
         imageUrl: finalImageUrl || undefined,
         isFeatured: free ? false : (isFeatured === 'on'),
         gender,
+        isFree: free,
         appleProductId: free ? null : (appleProductId || null),
         googleProductId: free ? null : (googleProductId || null),
       },
