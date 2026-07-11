@@ -173,6 +173,51 @@ function describeBodyShape(weight, height) {
   return { weightBuild: w.build, weightDetail: w.detail, heightLabel: h.label, heightRatio: h.ratio };
 }
 
+// SHOP-PREVIEW mode prompt. The FIRST reference image is the user's EXISTING
+// avatar — the sole identity source. We only change clothing, so the character
+// (face, hair, gender, body, skin) never drifts. This path is used ONLY by the
+// shop preview; onboarding/generate keep buildMinimePrompt below unchanged.
+// Same output rules (full-body, front-facing, transparent bg, strict garment refs).
+function buildDressPrompt({ outfit, isFeminine }) {
+  const o = outfit || {};
+  const g = (label, v) => {
+    if (!v) return null;
+    const isRef = typeof v === 'string' && v.startsWith('http');
+    return `- ${label}: ${isRef ? `EXACTLY match this reference image (same shape, color, pattern) → ${v}` : v}`;
+  };
+  // Include EVERY item present on the outfit — nothing is dropped. The stored
+  // outfit is already gender-appropriate (the app sends the right items per
+  // gender), so we simply render whatever is there.
+  const garments = [
+    g('Shirt/top', o.shirt),
+    g('Pants/bottom', o.pant),
+    g('Shoes', o.shoes),
+    g('Glasses/sunglasses', o.glasses),
+    g('Watch (on wrist)', o.watch),
+    g('Bag/purse', o.bag),
+    g('Jewelry/ornaments', o.jewelry),
+    g('Lipstick/makeup', o.lipstick),
+  ].filter(Boolean).join('\n');
+
+  return `
+Edit the FIRST reference image. Do NOT create a new person.
+
+# ABSOLUTE IDENTITY LOCK — HIGHEST PRIORITY
+The FIRST reference image is an existing 3D cartoon avatar of ONE specific character.
+Keep that character 100% IDENTICAL in every way: same face and facial features, same hairstyle and hair color, same GENDER, same skin tone and ethnicity, same body shape, height and proportions, same neutral front-facing pose. Do NOT change, restyle, re-age, slim, or alter the gender of the person in ANY way. Only their clothing may change.
+
+# CHANGE ONLY THE CLOTHING
+Dress the SAME character in exactly these garments (the later reference images are the garment images):
+${garments || '- (no garment change)'}
+Any clothing item not listed above must stay EXACTLY as it already appears on the avatar.
+
+# OUTPUT
+- Full-body, front-facing, straight-on. Both feet visible, no cropping (keep ~10-12% margin above head / below shoes).
+- Background: TRANSPARENT (nothing behind the character). Single character only.
+- Clean Pixar-like 3D cartoon style, matching the avatar image.
+`.trim();
+}
+
 function buildMinimePrompt({ isFeminine, outfit, facialHair, skinToneHint, hairHint, bodyWeight, bodyHeight }) {
   const o = outfit || {};
   const noGlasses = !o.glasses;
@@ -336,9 +381,18 @@ exports.renderCurrentMinime = async (userId, opts = {}) => {
         }),
   ]);
 
-  // Body shape: use override from opts if provided, else fall back to user profile
+  // ── MODE SELECT ──────────────────────────────────────────────────────────
+  // opts.baseAvatarUrl present  → SHOP-PREVIEW mode: dress the user's existing
+  //   avatar (identity comes from that image; no face/body regeneration → no
+  //   gender drift). Used only by the shop preview.
+  // opts.baseAvatarUrl absent   → ONBOARDING/GENERATE mode: original from-scratch
+  //   render (face + body). This path stays exactly as before — untouched.
+  const baseAvatarUrl = (opts.baseAvatarUrl && isHttpUrl(opts.baseAvatarUrl)) ? opts.baseAvatarUrl : null;
+
+  // Body shape: use override from opts if provided, else fall back to user profile.
+  // Not needed in preview mode (proportions come from the base avatar image).
   const effectiveBodyShapeUrl = opts.bodyShapeUrl || user?.bodyShapeUrl;
-  if (!effectiveBodyShapeUrl) throw new Error('Missing body shape');
+  if (!effectiveBodyShapeUrl && !baseAvatarUrl) throw new Error('Missing body shape');
 
   // Body type: use override from opts if provided, else fall back to user profile
   const effectiveBodyType = opts.bodyType || user?.bodyType;
@@ -388,12 +442,14 @@ exports.renderCurrentMinime = async (userId, opts = {}) => {
 
   console.log(`[FACE REF] userId=${userId} source="${faceRefSource}" url=${faceReference || 'NULL'}`);
 
-  if (!faceReference) {
+  // Preview (dress-up) mode gets identity from the base avatar, so a face ref
+  // is not required there. Onboarding still requires one.
+  if (!faceReference && !baseAvatarUrl) {
     throw new Error('No selfie/premade found. Upload a selfie or select a premade avatar first.');
   }
 
-  // parse hints from premade url
-  const meta = parsePremadeMeta(faceReference);
+  // parse hints from premade url (onboarding only; preview mode may have no face ref)
+  const meta = faceReference ? parsePremadeMeta(faceReference) : {};
 
   // resolve hints (priority: explicit opts > url meta > defaults)
   const facialHair = isFeminine ? 'none'
@@ -405,7 +461,7 @@ exports.renderCurrentMinime = async (userId, opts = {}) => {
   const hairHint = meta.hair;
 
   // outfit resolve (opts override DB)
-  const outfitForModel = normalizeOutfit({
+  const rawOutfit = {
     shirt:    opts.shirt    ?? mm.shirt,
     pant:     opts.pant     ?? mm.pant,
     shoes:    opts.shoes    ?? mm.shoes,
@@ -413,8 +469,13 @@ exports.renderCurrentMinime = async (userId, opts = {}) => {
     lipstick: opts.lipstick ?? mm.lipstick,
     jewelry:  opts.jewelry  ?? mm.jewelry,
     bag:      opts.bag      ?? mm.bag,
-      watch:    opts.watch    ?? mm.watch,
-  });
+    watch:    opts.watch    ?? mm.watch,
+  };
+  // Onboarding fills empty slots with defaults (basic tee / jeans / sneakers).
+  // Preview dress-up must NOT default: an unset slot means "keep whatever the
+  // avatar already wears", so it uses the raw outfit (empty slots stay unlisted).
+  const outfitForModel = normalizeOutfit(rawOutfit);
+  const outfitForPrompt = baseAvatarUrl ? rawOutfit : outfitForModel;
 
   // Await body shape lookup (was started in parallel above)
   let bodyWeight = null, bodyHeight = null;
@@ -427,18 +488,22 @@ exports.renderCurrentMinime = async (userId, opts = {}) => {
     console.warn(`[BODY SHAPE] No DB record found for URL — using image reference only`);
   }
 
-  const prompt = buildMinimePrompt({
-    isFeminine,
-    outfit: outfitForModel,
-    facialHair,
-    skinToneHint,
-    hairHint,
-    bodyWeight,
-    bodyHeight,
-  });
+  const prompt = baseAvatarUrl
+    ? buildDressPrompt({ outfit: outfitForPrompt, isFeminine })  // shop preview: dress existing avatar
+    : buildMinimePrompt({                                        // onboarding: original from-scratch
+        isFeminine,
+        outfit: outfitForModel,
+        facialHair,
+        skinToneHint,
+        hairHint,
+        bodyWeight,
+        bodyHeight,
+      });
 
-  // Collect clothing reference images (URLs)
-  const outfitUrls = collectOutfitImageUrls(outfitForModel);
+  // Collect clothing reference images (URLs). Uses the same outfit source as the
+  // prompt so dress-up feeds only the actually-selected items (defaults aren't
+  // URLs anyway, so onboarding behavior is unchanged).
+  const outfitUrls = collectOutfitImageUrls(outfitForPrompt);
 
   console.log('\n========== MINIME GENERATION ==========');
   console.log('INPUT IMAGE URLs:');
@@ -455,35 +520,53 @@ exports.renderCurrentMinime = async (userId, opts = {}) => {
   // Fetch ALL reference images in parallel (face + body + outfit)
   const fetchTasks = [];
 
-  // 1) Face reference — MOST IMPORTANT
-  fetchTasks.push(
-    fetchImageAsBuffer(faceReference).then(async buf => {
-      if (buf) {
-        const file = await toFile(buf, 'face-reference.png', { type: 'image/png' });
-        console.log(`✓ Fetched FACE reference: ${faceReference.substring(0, 80)}...`);
-        return { order: 0, file };
-      }
-      console.warn(`✗ Failed to fetch face reference: ${faceReference} — generation may lack facial accuracy`);
-      return null;
-    })
-  );
-
-  // 2) Body shape — for proportions
-  if (effectiveBodyShapeUrl && isHttpUrl(effectiveBodyShapeUrl)) {
+  if (baseAvatarUrl) {
+    // ── SHOP-PREVIEW mode ── identity anchor = the user's EXISTING avatar.
+    // No face/body references → the person (incl. gender) can't drift; only the
+    // clothes below change.
     fetchTasks.push(
-      fetchImageAsBuffer(effectiveBodyShapeUrl).then(async buf => {
+      fetchImageAsBuffer(baseAvatarUrl).then(async buf => {
         if (buf) {
-          const file = await toFile(buf, 'body-shape.png', { type: 'image/png' });
-          console.log(`✓ Fetched BODY SHAPE: ${effectiveBodyShapeUrl.substring(0, 80)}...`);
-          return { order: 1, file };
+          const file = await toFile(buf, 'current-avatar.png', { type: 'image/png' });
+          console.log(`✓ Fetched BASE AVATAR (preview dress-up): ${baseAvatarUrl.substring(0, 80)}...`);
+          return { order: 0, file };
         }
-        console.warn(`✗ Failed to fetch body shape: ${effectiveBodyShapeUrl}`);
+        console.warn(`✗ Failed to fetch base avatar: ${baseAvatarUrl}`);
         return null;
       })
     );
+  } else {
+    // ── ONBOARDING/GENERATE mode ── original from-scratch inputs (unchanged).
+    // 1) Face reference — MOST IMPORTANT
+    fetchTasks.push(
+      fetchImageAsBuffer(faceReference).then(async buf => {
+        if (buf) {
+          const file = await toFile(buf, 'face-reference.png', { type: 'image/png' });
+          console.log(`✓ Fetched FACE reference: ${faceReference.substring(0, 80)}...`);
+          return { order: 0, file };
+        }
+        console.warn(`✗ Failed to fetch face reference: ${faceReference} — generation may lack facial accuracy`);
+        return null;
+      })
+    );
+
+    // 2) Body shape — for proportions
+    if (effectiveBodyShapeUrl && isHttpUrl(effectiveBodyShapeUrl)) {
+      fetchTasks.push(
+        fetchImageAsBuffer(effectiveBodyShapeUrl).then(async buf => {
+          if (buf) {
+            const file = await toFile(buf, 'body-shape.png', { type: 'image/png' });
+            console.log(`✓ Fetched BODY SHAPE: ${effectiveBodyShapeUrl.substring(0, 80)}...`);
+            return { order: 1, file };
+          }
+          console.warn(`✗ Failed to fetch body shape: ${effectiveBodyShapeUrl}`);
+          return null;
+        })
+      );
+    }
   }
 
-  // 3) Clothing reference images
+  // 3) Clothing reference images — ALL selected items (never dropped), both modes
   outfitUrls.forEach(({ field, url }, idx) => {
     fetchTasks.push(
       fetchImageAsBuffer(url).then(async buf => {

@@ -78,9 +78,26 @@ exports.previewCustomOutfit = async (req, res) => {
 
   await prisma.minime.update({ where: { id: mm.id }, data });
 
+  // Dress the user's CURRENT avatar instead of regenerating the person (which
+  // can drift gender). Identity = their saved avatar image; fall back to any
+  // rendered avatar. If they have none yet, baseAvatarUrl stays null and the
+  // render uses the original onboarding path — unchanged.
+  const currentAvatar =
+    (await prisma.minime.findFirst({
+      where: { userId, isSaved: true, avatarUrl: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+      select: { avatarUrl: true },
+    })) ||
+    (await prisma.minime.findFirst({
+      where: { userId, avatarUrl: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+      select: { avatarUrl: true },
+    }));
+  const baseAvatarUrl = currentAvatar?.avatarUrl || null;
+
   // ✅ রেন্ডার কলে টার্গেট মিনিমে আইডি পাঠাও—saved কখনো স্পর্শ হবে না
   try {
-    const rendered = await renderCurrentMinime(userId, { targetMinimeId: mm.id });
+    const rendered = await renderCurrentMinime(userId, { targetMinimeId: mm.id, baseAvatarUrl });
     return res.json({
       success: true,
       message: 'Preview applied & rendered',
