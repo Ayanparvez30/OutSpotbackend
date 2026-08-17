@@ -1,0 +1,188 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Challenges</h1>
+    <p class="page-subtitle">Create, feature, activate</p>
+  </div>
+  <a href="/admin/challenges/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-2"></i>New challenge</a>
+</div>
+
+<%# Which challenge is LIVE right now — the app's automatic date-seeded pick.
+    Everyone sees this same daily/weekly today; it rotates on its own. %>
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body d-flex align-items-center gap-3">
+      <span class="stat-icon" style="background:linear-gradient(135deg,#a855f7,#fb7185)"><i class="bi bi-lightning-charge-fill"></i></span>
+      <div>
+        <div class="text-muted small">Live now · Today's Daily<% if (typeof liveZone !== 'undefined') { %> <span class="text-secondary">(<%= liveZone %>)</span><% } %></div>
+        <% if (liveDaily) { %>
+          <div class="fw-semibold"><%= liveDaily.title %> <span class="text-secondary small">· <%= liveDaily.points %> pts</span>
+            <% if (liveDailySource === 'scheduled') { %><span class="status-pill" style="background:#a855f7;color:#fff;font-size:.62rem"><i class="bi bi-pin-angle-fill me-1"></i>Manually set</span><% } else { %><span class="text-secondary" style="font-size:.68rem">· auto-picked</span><% } %>
+          </div>
+        <% } else { %>
+          <div class="text-secondary">No eligible daily challenge today.</div>
+        <% } %>
+      </div>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body d-flex align-items-center gap-3">
+      <span class="stat-icon" style="background:linear-gradient(135deg,#a855f7,#fb7185)"><i class="bi bi-calendar-week"></i></span>
+      <div>
+        <div class="text-muted small">Live now · This Week's Weekly</div>
+        <% if (liveWeekly) { %>
+          <div class="fw-semibold"><%= liveWeekly.title %> <span class="text-secondary small">· <%= liveWeekly.points %> pts</span>
+            <% if (liveWeeklySource === 'scheduled') { %><span class="status-pill" style="background:#a855f7;color:#fff;font-size:.62rem"><i class="bi bi-pin-angle-fill me-1"></i>Manually set</span><% } else { %><span class="text-secondary" style="font-size:.68rem">· auto-picked</span><% } %>
+          </div>
+        <% } else { %>
+          <div class="text-secondary">No eligible weekly challenge this week.</div>
+        <% } %>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div class="d-flex gap-2 align-items-center">
+    <span class="text-muted me-1"><%= total %> challenges</span>
+    <a href="/admin/challenges" class="btn btn-sm <%= !frequency ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
+    <a href="/admin/challenges?frequency=DAILY" class="btn btn-sm <%= frequency === 'DAILY' ? 'btn-primary' : 'btn-outline-secondary' %>">Daily</a>
+    <a href="/admin/challenges?frequency=WEEKLY" class="btn btn-sm <%= frequency === 'WEEKLY' ? 'btn-primary' : 'btn-outline-secondary' %>">Weekly</a>
+  </div>
+  <form method="GET" action="/admin/challenges" class="d-flex gap-2">
+    <input type="text" name="q" class="form-control form-control-sm" placeholder="Search..." value="<%= search %>" style="width:200px">
+    <button class="btn btn-sm btn-primary">Search</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>Title</th><th>Type</th><th>Frequency</th><th>Points</th><th>Status</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <% challenges.forEach(c => { %>
+          <tr>
+            <td>
+              <div class="fw-semibold"><%= c.title %></div>
+              <% if (c.description) { %><div class="text-secondary small"><%= c.description %></div><% } %>
+            </td>
+            <td><%= c.type || '-' %></td>
+            <td><%= c.frequency.charAt(0) + c.frequency.slice(1).toLowerCase() %></td>
+            <td class="fw-semibold"><%= c.points %></td>
+            <td>
+              <% if (c.isActive) { %>
+                <span class="status-pill status-active">Active</span>
+              <% } else { %>
+                <span class="status-pill status-inactive">Inactive</span>
+              <% } %>
+              <% if (c.isFeatured) { %> <span class="status-pill status-featured">Featured</span><% } %>
+              <% if ((typeof liveDaily !== 'undefined' && liveDaily && c.id === liveDaily.id) || (typeof liveWeekly !== 'undefined' && liveWeekly && c.id === liveWeekly.id)) { %>
+                <span class="status-pill" style="background:#a855f7;color:#fff"><i class="bi bi-broadcast me-1"></i>Live now</span>
+              <% } %>
+            </td>
+            <td class="text-end">
+              <div class="d-flex gap-2 justify-content-end">
+                <a href="/admin/challenges/<%= c.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
+                <button type="button" class="row-action js-schedule" title="Schedule for a date"
+                        data-id="<%= c.id %>" data-title="<%= c.title %>" data-freq="<%= c.frequency %>">
+                  <i class="bi bi-calendar-event"></i>
+                </button>
+                <form method="POST" action="/admin/challenges/<%= c.id %>/feature" style="display:inline">
+                  <button class="row-action<%= c.isFeatured ? ' star-on' : '' %>" title="<%= c.isFeatured ? 'Unfeature' : 'Feature' %>">
+                    <i class="bi <%= c.isFeatured ? 'bi-star-fill' : 'bi-star' %>"></i>
+                  </button>
+                </form>
+                <form method="POST" action="/admin/challenges/<%= c.id %>/<%= c.isActive ? 'deactivate' : 'activate' %>" style="display:inline">
+                  <button class="row-action<%= c.isActive ? ' power-on' : '' %>" title="<%= c.isActive ? 'Deactivate' : 'Activate' %>">
+                    <i class="bi bi-power"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (challenges.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No challenges found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<!-- Scheduled overrides (today & upcoming) -->
+<div class="card mt-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-calendar-check me-2 text-secondary"></i>Scheduled overrides (today &amp; upcoming)</span>
+  </div>
+  <div class="card-body p-0">
+    <% if (!upcomingSchedules || upcomingSchedules.length === 0) { %>
+      <p class="text-secondary p-3 mb-0">No overrides set — every window uses the automatic pick. Use the <i class="bi bi-calendar-event"></i> action on a challenge to pin it to a date.</p>
+    <% } else { %>
+      <table class="table table-hover mb-0">
+        <thead><tr><th>When</th><th>Frequency</th><th>Challenge</th><th class="text-end">Actions</th></tr></thead>
+        <tbody>
+          <% upcomingSchedules.forEach(s => { %>
+            <tr>
+              <td><%= s.frequency === 'WEEKLY' ? 'Week of ' + s.windowKey : s.windowKey %></td>
+              <td><%= s.frequency.charAt(0) + s.frequency.slice(1).toLowerCase() %></td>
+              <td class="fw-semibold"><%= s.challenge ? s.challenge.title : '—' %></td>
+              <td class="text-end">
+                <form method="POST" action="/admin/challenges/schedule/<%= s.id %>/clear" style="display:inline">
+                  <button class="row-action danger" title="Remove override" data-confirm="Remove this override? The window reverts to the automatic pick."><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
+
+<!-- Schedule modal -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" id="scheduleForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Schedule challenge</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">Pin <strong id="schTitle"></strong> (<span id="schFreq"></span>) to a date. This overrides the automatic pick for that window.</p>
+          <label class="form-label">Date</label>
+          <input type="date" name="date" id="schDate" class="form-control" required>
+          <p class="text-secondary small mt-2 mb-0" id="schHint"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-gradient">Set for this date</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modalEl = document.getElementById('scheduleModal');
+    var form = document.getElementById('scheduleForm');
+    var today = '<%= todayKey %>';
+    document.querySelectorAll('.js-schedule').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var freq = btn.dataset.freq;
+        form.action = '/admin/challenges/' + btn.dataset.id + '/schedule';
+        document.getElementById('schTitle').textContent = btn.dataset.title || '';
+        document.getElementById('schFreq').textContent = freq;
+        var d = document.getElementById('schDate');
+        d.value = today; d.min = today;
+        document.getElementById('schHint').textContent = freq === 'WEEKLY'
+          ? 'Applies to the whole week (Sun–Sat) that contains this date.'
+          : 'Applies to this exact day.';
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    });
+  })();
+</script>

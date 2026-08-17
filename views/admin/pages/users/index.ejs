@@ -1,0 +1,179 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">User Management</h1>
+    <p class="page-subtitle">Profiles, points, inventory and moderation</p>
+  </div>
+  <a href="/admin/users/export/csv" class="btn btn-gradient"><i class="bi bi-download me-2"></i>Export CSV</a>
+</div>
+
+<form method="GET" action="/admin/users" class="d-flex gap-2 mb-3">
+  <input type="text" name="q" class="form-control" placeholder="Search by name, email, referral, city..." value="<%= search %>" style="max-width:340px">
+  <button class="btn btn-primary"><i class="bi bi-search me-1"></i>Search</button>
+</form>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Referral</th>
+          <th>Points</th>
+          <th>Location</th>
+          <th>Joined</th>
+          <th>Status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% users.forEach(u => {
+             const avatar = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+             const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+             const initials = (fullName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        %>
+          <tr>
+            <td>
+              <a href="/admin/users/<%= u.id %>" class="user-cell">
+                <% if (avatar) { %>
+                  <img src="<%= avatar %>" class="user-avatar" alt="">
+                <% } else { %>
+                  <span class="user-avatar-fallback"><%= initials %></span>
+                <% } %>
+                <span>
+                  <span class="user-name d-block"><%= fullName %></span>
+                  <span class="user-email"><%= u.email || u.phone || 'no email' %></span>
+                </span>
+              </a>
+            </td>
+            <td>
+              <% if (u.referredBy && u.referredBy.username) { %>
+                <a href="/admin/users?q=<%= encodeURIComponent(u.referredBy.username) %>">@<%= u.referredBy.username %></a>
+              <% } else { %>-<% } %>
+            </td>
+            <td class="fw-semibold"><%= (u.totalPoints || 0).toLocaleString() %></td>
+            <td>
+              <% if (u.cityName) { %>
+                <%= u.cityName %>
+              <% } else if (u.Location && u.Location.latitude != null) { %>
+                <%= u.Location.latitude.toFixed(2) %>, <%= u.Location.longitude.toFixed(2) %>
+              <% } else { %>-<% } %>
+            </td>
+            <td><%= u.createdAt.toLocaleDateString() %></td>
+            <td>
+              <% if (u.isBanned) { %>
+                <span class="status-pill status-blocked">Banned</span>
+              <% } else if (!u.isActive) { %>
+                <span class="status-pill status-inactive">Inactive</span>
+              <% } else { %>
+                <span class="status-pill status-active">Active</span>
+              <% } %>
+            </td>
+            <td>
+              <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="row-action js-edit-profile" title="Edit profile"
+                        data-user-id="<%= u.id %>"
+                        data-name="<%= [u.firstName, u.lastName].filter(Boolean).join(' ') %>"
+                        data-avatar="<%= avatar || '' %>"
+                        data-bio="<%= u.bio || '' %>">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <button type="button" class="row-action js-adjust-points" title="Adjust points"
+                        data-user-id="<%= u.id %>" data-user-name="<%= [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username %>">
+                  <i class="bi bi-coin"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (users.length === 0) { %>
+          <tr><td colspan="7" class="text-center text-muted py-3">No users found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<!-- Edit profile modal (posts to the existing /edit route) -->
+<div class="modal fade" id="editProfileModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" id="editProfileForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" name="name" id="epName" class="form-control" placeholder="Full name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Avatar URL</label>
+            <input type="text" name="avatarUrl" id="epAvatar" class="form-control" placeholder="https://...">
+          </div>
+          <div class="mb-0">
+            <label class="form-label">Bio</label>
+            <textarea name="bio" id="epBio" class="form-control" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-gradient">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Adjust points modal (posts to the existing /adjust-points route) -->
+<div class="modal fade" id="adjustPointsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST" id="adjustPointsForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Adjust points for <span id="apUserName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Delta (use negative to debit)</label>
+          <input type="number" name="points" class="form-control" placeholder="e.g. 500 or -200" required autofocus>
+          <input type="hidden" name="reason" value="ADMIN_ADJUSTMENT">
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-gradient">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    // Edit profile modal
+    var editEl = document.getElementById('editProfileModal');
+    var editForm = document.getElementById('editProfileForm');
+    document.querySelectorAll('.js-edit-profile').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        editForm.action = '/admin/users/' + btn.dataset.userId + '/edit';
+        document.getElementById('epName').value = btn.dataset.name || '';
+        document.getElementById('epAvatar').value = btn.dataset.avatar || '';
+        document.getElementById('epBio').value = btn.dataset.bio || '';
+        bootstrap.Modal.getOrCreateInstance(editEl).show();
+      });
+    });
+
+    // Adjust points modal
+    var modalEl = document.getElementById('adjustPointsModal');
+    var form = document.getElementById('adjustPointsForm');
+    var nameEl = document.getElementById('apUserName');
+    document.querySelectorAll('.js-adjust-points').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        form.action = '/admin/users/' + btn.dataset.userId + '/adjust-points';
+        nameEl.textContent = btn.dataset.userName;
+        form.querySelector('input[name="points"]').value = '';
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+    });
+  })();
+</script>

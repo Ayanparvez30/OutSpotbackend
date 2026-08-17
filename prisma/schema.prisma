@@ -1,0 +1,837 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  Int               @id @default(autoincrement())
+  username            String            @unique
+  email               String?           @unique
+  phone               String?           @unique
+  password            String
+  isVerified          Boolean           @default(false)
+  otp                 String?
+  otpExpiresAt        DateTime?
+  authorization       String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  isProfilePrivate    Boolean           @default(false)
+  // Profile Onboarding
+  firstName           String?
+  lastName            String?
+  bio                 String?
+  bodyType            String?
+  bodyShapeUrl        String?
+  selfieUrl           String?           @db.Text // canonical selfie — never lost when drafts are deleted
+  communities         CommunityMember[]
+  syncedContacts      ContactSync[]
+  // 👇 Referral fields
+  referralCode        String            @unique @default(cuid())
+  referredById        Int?
+  referredBy          User?             @relation("UserReferredBy", fields: [referredById], references: [id], onDelete: SetNull)
+  referredUsers       User[]            @relation("UserReferredBy")
+  invitesSent         Referral[]        @relation("UserInvites")
+  invitesReceived     Referral[]        @relation("UserReferred")
+  fcmToken            String?
+  notificationEnabled Boolean           @default(true) // master switch: off => no FCM push at all
+  notifications       Notification[]
+  messages            Message[]
+  chats               UserOnChat[]
+  minime              Minime[]
+  communitiesCreated  Community[]       @relation("UserCreatedCommunities")
+  media               Media[]           @relation("UserMedia")
+  stories             Story[]
+  savedStories        SavedStory[]
+
+  friendRequestsSent     Friendship[]          @relation("friendRequestsSent")
+  friendRequestsReceived Friendship[]          @relation("friendRequestsReceived")
+  blocks                 Block[]               @relation("blocks")
+  blockedBy              Block[]               @relation("blocked")
+  totalPoints            Int                   @default(0)
+  Location               Location?
+  submissions            Submission[]
+  completions            ChallengeCompletion[]
+  locationPoints         LocationPoint[]
+  firebaseUid            String?
+  LocationHistory        LocationHistory[]
+
+  ChatImage ChatImage[]
+
+  Chat Chat[]
+
+  reportsSent Report[] @relation("Reporter")
+
+  reportsReceived Report[] @relation("Reported")
+
+  // Per-space bans (community / group). User.isBanned (above) is the GLOBAL
+  // admin-team ban; these are the creator/admin-issued local bans.
+  communityBansIssued CommunityBan[] @relation("CommunityBanIssuer")
+  communityBansAgainst CommunityBan[] @relation("CommunityBanTarget")
+  chatBansIssued      ChatBan[]      @relation("ChatBanIssuer")
+  chatBansAgainst     ChatBan[]      @relation("ChatBanTarget")
+
+  actedNotifications Notification[] @relation("NotificationActor")
+
+  pointsLedger         PointsLedger[]
+  inventory            UserInventory[]
+  multipliers          ActiveMultiplier[]
+  pointBundlePurchases PointBundlePurchase[]
+  itemPurchases        ItemPurchase[]
+  communityHistory     CommunityHistory[]
+  chatLocks            ChatLock[]
+  notificationRedDot   Boolean               @default(false)
+
+  // Admin panel fields
+  isActive  Boolean   @default(true)
+  isBanned  Boolean   @default(false)
+  bannedAt  DateTime?
+  banReason String?
+
+  @@index([selfieUrl(length: 191)]) // orphan-guard scan (TEXT col → needs prefix)
+  @@index([bodyShapeUrl]) // orphan-guard scan
+}
+
+model Minime {
+  id Int @id @default(autoincrement())
+
+  avatarUrl String? @db.Text
+  selfieUrl String?
+  shirt     String?
+  pant      String?
+  shoes     String?
+  glasses   String?
+
+  lipstick  String?
+  jewelry   String?
+  bag       String?
+  watch     String?
+  isSaved   Boolean  @default(false)
+  isDraft   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([avatarUrl(length: 191)]) // orphan-guard scan (TEXT col → needs prefix)
+  @@index([selfieUrl]) // orphan-guard scan
+}
+
+model Media {
+  id          Int      @id @default(autoincrement())
+  senderId    Int
+  receiverId  Int?
+  groupId     Int?
+  challengeId Int?
+  communityId Int?
+  fileUrl     String
+  type        String
+  chatId      Int?
+  createdAt   DateTime @default(now())
+
+  sender    User       @relation("UserMedia", fields: [senderId], references: [id], onDelete: Cascade)
+  community Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+}
+
+enum StoryVisibility {
+  private
+  profile
+}
+
+enum StoryType {
+  IMAGE
+  VIDEO
+}
+
+enum StoryStatus {
+  DRAFT
+  ACTIVE
+  SAVED
+  VAULT
+}
+
+enum CarSaleStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+}
+
+model Story {
+  id         Int             @id @default(autoincrement())
+  userId     Int
+  mediaUrl   String
+  type       StoryType
+  visibility StoryVisibility
+  status     StoryStatus     @default(DRAFT)
+  createdAt  DateTime        @default(now())
+  latitude   Float?
+  longitude  Float?
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedBy SavedStory[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([mediaUrl]) // orphan-guard scan
+}
+
+model SavedStory {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  storyId   Int
+  status    StoryStatus
+  createdAt DateTime    @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId, status])
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  latitude  Float
+  longitude Float
+  updatedAt DateTime @updatedAt
+}
+
+model LocationHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+}
+
+// schema.prisma — add to LocationPoint
+model LocationPoint {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  mediaUrl  String
+  placeId   String?
+  placeName String?
+  placeType String?
+  latitude  Float?
+  longitude Float?
+  points    Int     @default(5)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, placeId, createdAt]) // 👈 fast same-place checks
+  @@index([mediaUrl]) // orphan-guard scan
+}
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  userId      Int
+  actorId     Int?
+  type        NotificationType
+  title       String
+  description String?
+  data        Json?
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  // Idempotency key for notifications that must fire at most once per user per
+  // time window ("yyyy-LL-dd" of the day for DAILY_CHALLENGE, of the Sunday
+  // week-start for WEEKLY_CHALLENGE). Null for event-driven types such as
+  // FRIEND_REQUEST, which may legitimately repeat — MySQL permits duplicate
+  // NULLs in a unique index, so those rows stay unconstrained.
+  windowKey String?
+
+  // relations
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  // indexes
+  @@unique([userId, type, windowKey])
+  @@index([userId, createdAt])
+  @@index([actorId])
+  @@index([userId, isRead, createdAt])
+}
+
+enum NotificationType {
+  FRIEND_ACCEPTED
+  FRIEND_REQUEST
+  NEW_CHALLENGE
+  DAILY_CHALLENGE
+  WEEKLY_CHALLENGE
+  // Per-space ban / unban notifications (item 10). Distinct from the global
+  // User.isBanned admin action; these are issued by community creators / group
+  // admins when they remove a member.
+  COMMUNITY_BANNED
+  COMMUNITY_UNBANNED
+  GROUP_BANNED
+  GROUP_UNBANNED
+}
+
+model Chat {
+  id          Int          @id @default(autoincrement())
+  name        String?
+  isGroup     Boolean      @default(false)
+  isCommunity Boolean      @default(false)
+  isLocked    Boolean      @default(false)
+  communityId Int?
+  community   Community?   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  users       UserOnChat[]
+
+  messages            Message[]
+  imageUrl            String?
+  disappearingSeconds Int? // null = off; seconds until messages expire (e.g. 86400 = 24h)
+  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+
+  createdById Int?
+  createdBy   User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  bans      ChatBan[]
+  chatLocks ChatLock[]
+}
+
+// Per-user password lock on a chat. Each participant maintains their own lock;
+// one user locking a chat has no effect on other participants. Unrelated to
+// Chat.isLocked (group-freeze admin flag).
+model ChatLock {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  chatId       Int
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatId])
+  @@index([userId])
+  @@index([chatId])
+}
+
+model Message {
+  id        Int       @id @default(autoincrement())
+  content   String?   @db.LongText
+  sender    User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderId  Int
+  chat      Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId    Int
+  imageUrl  String?
+  isSystem  Boolean   @default(false) // system alert messages (e.g. "disappearing messages turned on")
+  expiresAt DateTime? // null = permanent; set when chat has disappearingSeconds
+
+  // Reply / quote (item 8). Null when message is not a reply.
+  // SetNull (not Cascade) so deleting a referenced message turns child rows into
+  // "reply to deleted message" rather than wiping them.
+  replyToMessageId Int?
+  replyTo          Message?  @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies          Message[] @relation("MessageReplies")
+
+  // Forward flag (item 6). Default false → existing rows unaffected.
+  forwarded Boolean @default(false)
+
+  // Reports targeting this message (item 2).
+  reports Report[] @relation("MessageReports")
+
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt]) // fast cleanup query
+  @@index([imageUrl]) // orphan-guard scan
+  @@index([replyToMessageId]) // reply lookup
+}
+
+model ChatImage {
+  id      Int    @id @default(autoincrement())
+  userId  Int
+  fileUrl String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([fileUrl]) // orphan-guard scan
+}
+
+enum ChatRole {
+  ADMIN
+  MEMBER
+}
+
+model UserOnChat {
+  id     Int  @id @default(autoincrement())
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId Int
+
+  // NEW ↓
+  role                   ChatRole @default(MEMBER)
+  joinedAt               DateTime @default(now())
+  lastSeenMessageId      Int?
+  lastDeliveredMessageId Int?
+  clearedUpToMessageId   Int      @default(0) // disappear-on-exit: messages with id <= this are hidden from this user
+
+  isMuted Boolean   @default(false)
+  mutedAt DateTime?
+
+  @@unique([userId, chatId])
+  @@index([chatId, role]) // handy for permission checks like “who are admins in this chat?”
+}
+
+model Friendship {
+  id          Int              @id @default(autoincrement())
+  requesterId Int
+  receiverId  Int
+  status      FriendshipStatus @default(PENDING)
+  requestedAt DateTime         @default(now())
+  acceptedAt  DateTime?
+
+  requester User @relation("friendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  receiver  User @relation("friendRequestsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, receiverId])
+}
+
+model Block {
+  id        Int      @id @default(autoincrement())
+  blockerId Int
+  blockedId Int
+  blockedAt DateTime @default(now())
+
+  blocker User @relation("blocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+enum ChallengeFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum PointsTier {
+  SILVER
+  GOLD
+}
+
+enum ChallengeDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  MULTI_STEP
+}
+
+model Challenge {
+  id             Int                   @id @default(autoincrement())
+  title          String
+  description    String
+  type           String?
+  frequency      ChallengeFrequency
+  points         Int                   @default(10)
+  tier           PointsTier            @default(SILVER)
+  requiredPhotos Int                   @default(1)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  submissions    Submission[]
+  completions    ChallengeCompletion[]
+
+  isActive   Boolean @default(true)
+  isFeatured Boolean @default(false)
+
+  // Scheduling constraints — backend won't surface a challenge when its
+  // constraint is violated. Both fields default to "always" so legacy rows
+  // keep showing as before.
+  // weekendOnly = true → only served Sat/Sun (Boston TZ).
+  // season = 'summer' | 'fall' | 'winter' | 'spring' → only served in that season; null = any season.
+  weekendOnly Boolean @default(false)
+  season      String?
+
+  // Effort tier — informs the recommended `points` value at create time and
+  // can be shown as a badge in the UI. Nullable so legacy rows don't break.
+  difficulty ChallengeDifficulty?
+
+  // Admin date/week overrides that pin this challenge to a window.
+  schedules ChallengeSchedule[]
+
+  @@unique([title, frequency]) // <— add this
+}
+
+/// Admin override: pins a specific challenge to a specific day (DAILY) or week
+/// (WEEKLY) window, taking priority over the deterministic seeded auto-pick the
+/// app falls back to. One override per (frequency, window).
+model ChallengeSchedule {
+  id          Int                @id @default(autoincrement())
+  frequency   ChallengeFrequency
+  windowKey   String             // DAILY: "yyyy-LL-dd" date; WEEKLY: week-start (Sunday) "yyyy-LL-dd"
+  challengeId Int
+  challenge   Challenge          @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([frequency, windowKey])
+  @@index([challengeId])
+}
+
+model Submission {
+  id                 Int       @id @default(autoincrement())
+  userId             Int
+  challengeId        Int
+  mediaUrl           String
+  verificationStatus String    @default("PENDING")
+  rejectionReason    String?   @db.Text
+  imageHash          String?
+  createdAt          DateTime  @default(now())
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge          Challenge @relation(fields: [challengeId], references: [id])
+
+  @@index([userId, challengeId, createdAt])
+  @@index([userId, imageHash])
+  @@index([mediaUrl]) // orphan-guard scan
+}
+
+model ChallengeCompletion {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  challengeId Int
+  windowKey   String
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+
+  @@unique([userId, challengeId, windowKey])
+}
+
+model Community {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  imageUrl  String?
+  bio       String?  @db.Text // optional community bio/description, set by creator/admin
+  creatorId Int
+  creator   User               @relation("UserCreatedCommunities", fields: [creatorId], references: [id], onDelete: Cascade)
+  members   CommunityMember[]
+  history   CommunityHistory[]
+  chats     Chat[]
+  media     Media[] // ✅ inverse of Media.community
+  bans      CommunityBan[]
+}
+
+model CommunityMember {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  communityId Int
+  joinedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+  @@index([userId, communityId])
+}
+
+model CommunityHistory {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  communityId Int
+  action      String // 'joined' or 'left'
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model ContactSync {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  username  String? // optional
+  phone     String? // optional
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id         Int       @id @default(autoincrement())
+  reporterId Int
+  reportedId Int
+  status     String    @default("PENDING") // PENDING, Reviewed, Resolved
+  reason     String?
+  adminNote  String?
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  // Type discriminator. Existing rows back-fill to "user" via the default —
+  // existing /api/report path keeps working with zero code change.
+  type String @default("user") // "user" | "message"
+
+  // Set only when type=message. SetNull so admin-deleting the message later
+  // does not cascade-delete the report record (audit trail preserved).
+  messageId Int?
+  message   Message? @relation("MessageReports", fields: [messageId], references: [id], onDelete: SetNull)
+
+  // Optional context for the moderation dashboard.
+  chatId      Int?
+  contextType String? // "dm" | "group" | "community"
+  communityId Int?
+  note        String?
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([type, status])
+  @@index([messageId])
+}
+
+// Per-community ban issued by the community creator. Distinct from the global
+// User.isBanned flag (admin-team only). Used to keep a banned user out of the
+// community chat + member list and block their re-join.
+model CommunityBan {
+  id          Int      @id @default(autoincrement())
+  communityId Int
+  userId      Int
+  bannedById  Int
+  reason      String?
+  bannedAt    DateTime @default(now())
+
+  community  Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user       User      @relation("CommunityBanTarget", fields: [userId], references: [id], onDelete: Cascade)
+  bannedBy   User      @relation("CommunityBanIssuer", fields: [bannedById], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([userId])
+}
+
+// Per-group-chat ban issued by a group admin. Used to keep a banned user out
+// of the group and block their re-add via addUsersToGroup.
+model ChatBan {
+  id         Int      @id @default(autoincrement())
+  chatId     Int
+  userId     Int
+  bannedById Int
+  reason     String?
+  bannedAt   DateTime @default(now())
+
+  chat     Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user     User @relation("ChatBanTarget", fields: [userId], references: [id], onDelete: Cascade)
+  bannedBy User @relation("ChatBanIssuer", fields: [bannedById], references: [id], onDelete: Cascade)
+
+  @@unique([chatId, userId])
+  @@index([userId])
+}
+
+enum ShopSlot {
+  TOP
+  BOTTOM
+  SHOES
+  GLASSES
+  ACCESSORY // legacy — keep for existing paid items
+  WATCH // masculine accessory
+  MAKEUP // feminine accessory → lipstick
+  PURSE // feminine accessory → bag
+  ORNAMENT // feminine accessory → jewelry
+}
+
+model BodyShape {
+  id        Int      @id @default(autoincrement())
+  gender    String // 'masculine' | 'feminine'
+  height    String // 'S' | 'M' | 'L'
+  weight    Int // 1-4
+  imageUrl  String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gender, height, weight])
+}
+
+model ShopItem {
+  id              Int      @id @default(autoincrement())
+  slot            ShopSlot
+  name            String
+  brand           String?
+  imageUrl        String   @db.Text
+  priceUsd        Decimal  @default(0.00) @db.Decimal(10, 2)
+  // any renderer / style info for avatar
+  payload         Json? // e.g. { "shirt": "Blue Hawaiian" }
+  isFeatured      Boolean  @default(false)
+  gender          String? // 'masculine' | 'feminine' | null (null = both)
+  // Explicit free/paid flag — the single source of truth for the app's free vs
+  // paid catalog. Free was previously inferred as "both store SKUs null", which
+  // no longer holds (see below).
+  isFree          Boolean  @default(false)
+  // Store SKU the app buys for this item. All PAID cosmetics now carry the SAME
+  // shared consumable SKU ("item_unlock_299"); the app reads this off the
+  // catalog and purchases it (server-driven — no hard-coded SKU in the app).
+  // Free items leave these null. NOT @unique any more: many items share one SKU.
+  // ShopItem is only ever looked up by id, never by SKU, so uniqueness is unused.
+  appleProductId  String?
+  googleProductId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventories UserInventory[]
+  purchases   ItemPurchase[]
+
+  @@unique([slot, name])
+}
+
+model UserInventory {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  itemId     Int
+  equipped   Boolean  @default(false)
+  acquiredAt DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+}
+
+model MultiplierProduct {
+  id              Int      @id @default(autoincrement())
+  productId       String   @unique // IAP SKU (Apple/Google)
+  factor          Float // e.g. 1.5, 2, 2.5
+  hours           Int // 1, 12, etc.
+  priceUsd        Decimal? @db.Decimal(10, 2) // optional — actual price comes from store
+  appleProductId  String?  @unique // App Store IAP SKU
+  googleProductId String?  @unique // Play Store IAP SKU
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ActiveMultiplier {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  factor      Float
+  startedAt   DateTime @default(now())
+  endsAt      DateTime
+  source      String // "IAP"
+  productId   String? // reference MultiplierProduct.productId
+  receiptTxId String? // platform transaction id for idempotency
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, receiptTxId])
+  @@index([userId, endsAt])
+}
+
+model PointsLedger {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  basePoints        Int
+  appliedMultiplier Float    @default(1)
+  finalPoints       Int
+  reason            String? // "CHALLENGE_COMPLETION", "LOCATION_UPLOAD", etc.
+  refId             Int? // optional foreign ref
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model PointBundleProduct {
+  id              Int      @id @default(autoincrement())
+  productId       String   @unique // e.g. "bundle_10", "bundle_50"
+  points          Int
+  priceUsd        Decimal? @db.Decimal(10, 2) // optional — actual price comes from store
+  isActive        Boolean  @default(true)
+  appleProductId  String?  @unique // App Store IAP SKU
+  googleProductId String?  @unique // Play Store IAP SKU
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PointBundlePurchase {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  productId   String
+  points      Int
+  priceUsd    Decimal  @db.Decimal(10, 2)
+  receiptTxId String?  @unique // Apple/Google tx id (optional) – idempotency
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// One row per paid cosmetic unlock. All cosmetics share a single $2.99
+// consumable store SKU; the item actually unlocked is identified server-side by
+// itemId, not by a per-item store SKU. receiptTxId is UNIQUE so one store
+// transaction unlocks exactly one item — without this a single $2.99 purchase
+// could be replayed to grant every item. This table is the source of truth for
+// "what did this user pay for"; UserInventory is just the derived entitlement.
+model ItemPurchase {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  itemId      Int
+  productId   String   // the shared store SKU the payment was made against
+  platform    String   // 'apple' | 'google'
+  priceUsd    Decimal  @db.Decimal(10, 2)
+  receiptTxId String   @unique // Apple/Google tx id — single-use replay guard
+  createdAt   DateTime @default(now())
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item ShopItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum ReferralStatus {
+  PENDING
+  REWARDED
+  CANCELLED
+}
+
+model Referral {
+  id         Int            @id @default(autoincrement())
+  inviterId  Int
+  inviteeId  Int
+  status     ReferralStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  rewardedAt DateTime?
+
+  inviter User @relation("UserInvites", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee User @relation("UserReferred", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@unique([inviterId, inviteeId])
+  @@unique([inviteeId]) // ➜ একজন ইউজার মাত্র ১বারই রেফার্ড হতে পারবে
+}
+
+model AdminUser {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  role      String   @default("admin")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PremadeAvatar {
+  id        Int      @id @default(autoincrement())
+  label     String
+  gender    String // "male" | "female"
+  imageUrl  String   @db.Text
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,103 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Shop Items</h1>
+    <p class="page-subtitle">Avatar shop items, pricing &amp; inventory</p>
+  </div>
+  <a href="/admin/shop/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-1"></i>Create</a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex flex-column gap-2">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <span class="text-muted"><%= total %> items</span>
+      <% function buildUrl(overrides) {
+        const params = new URLSearchParams();
+        if (search) params.set('q', search);
+        if (slotFilter && (!overrides || overrides.slot === undefined)) params.set('slot', slotFilter);
+        if (genderFilter && (!overrides || overrides.gender === undefined)) params.set('gender', genderFilter);
+        if (overrides) {
+          if (overrides.slot) params.set('slot', overrides.slot);
+          if (overrides.gender) params.set('gender', overrides.gender);
+        }
+        return '/admin/shop' + (params.toString() ? '?' + params.toString() : '');
+      } %>
+      <a href="<%= buildUrl({ gender: '' }) %>" class="btn btn-sm <%= !genderFilter ? 'btn-primary' : 'btn-outline-secondary' %>">All genders</a>
+      <a href="<%= buildUrl({ gender: 'masculine' }) %>" class="btn btn-sm <%= genderFilter === 'masculine' ? 'btn-primary' : 'btn-outline-secondary' %>">Masculine</a>
+      <a href="<%= buildUrl({ gender: 'feminine' }) %>" class="btn btn-sm <%= genderFilter === 'feminine' ? 'btn-primary' : 'btn-outline-secondary' %>">Feminine</a>
+    </div>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <a href="<%= buildUrl({ slot: '' }) %>" class="btn btn-sm <%= !slotFilter ? 'btn-primary' : 'btn-outline-secondary' %>">All slots</a>
+      <% ['TOP','BOTTOM','SHOES','GLASSES','WATCH','MAKEUP','PURSE','ORNAMENT','ACCESSORY'].forEach(s => { %>
+        <a href="<%= buildUrl({ slot: s }) %>" class="btn btn-sm <%= slotFilter === s ? 'btn-primary' : 'btn-outline-secondary' %>"><%= s %></a>
+      <% }) %>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <form method="GET" action="/admin/shop" class="d-flex gap-2">
+      <input type="text" name="q" class="form-control form-control-sm" placeholder="Search..." value="<%= search %>" style="width:180px">
+      <% if (slotFilter) { %><input type="hidden" name="slot" value="<%= slotFilter %>"><% } %>
+      <% if (genderFilter) { %><input type="hidden" name="gender" value="<%= genderFilter %>"><% } %>
+      <button class="btn btn-sm btn-primary">Search</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>Image</th><th>Name</th><th>Type</th><th>Gender</th><th>Slot</th><th>Featured</th><th>Owners</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        <% items.forEach(item => { %>
+          <%
+            const isFreeItem = !item.appleProductId && !item.googleProductId;
+          %>
+          <tr>
+            <td><img src="<%= item.imageUrl %>" class="shop-img" alt="<%= item.name %>" loading="lazy"></td>
+            <td><%= isFreeItem ? '-' : item.name %></td>
+            <td>
+              <% if (isFreeItem) { %>
+                <span class="badge bg-success">Free</span>
+              <% } else { %>
+                <span class="badge bg-warning text-dark">Paid</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (item.gender === 'masculine') { %>
+                <span class="badge bg-primary">Masculine</span>
+              <% } else if (item.gender === 'feminine') { %>
+                <span class="badge bg-danger">Feminine</span>
+              <% } else { %>
+                <span class="badge bg-secondary">—</span>
+              <% } %>
+            </td>
+            <td><%= item.slot %></td>
+            <td><%= item.isFeatured ? 'Yes' : '-' %></td>
+            <td><%= item._count.inventories %></td>
+            <td>
+              <div class="d-flex gap-2">
+                <a href="/admin/shop/<%= item.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
+                <form method="POST" action="/admin/shop/<%= item.id %>/feature" style="display:inline">
+                  <button class="row-action<%= item.isFeatured ? ' star-on' : '' %>" title="<%= item.isFeatured ? 'Unfeature' : 'Feature' %>">
+                    <i class="bi <%= item.isFeatured ? 'bi-star-fill' : 'bi-star' %>"></i>
+                  </button>
+                </form>
+                <form method="POST" action="/admin/shop/<%= item.id %>/delete" style="display:inline">
+                  <button class="row-action danger" data-confirm="Delete this item?" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (items.length === 0) { %>
+          <tr><td colspan="8" class="text-center text-muted py-3">No items found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

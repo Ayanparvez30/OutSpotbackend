@@ -1,0 +1,94 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Reports &amp; Safety</h1>
+    <p class="page-subtitle">Moderate user reports and take action · <%= total %> total</p>
+  </div>
+  <div class="d-flex gap-2 align-self-center">
+    <a href="/admin/reports" class="btn btn-sm <%= !statusFilter ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
+    <a href="/admin/reports?status=PENDING" class="btn btn-sm <%= statusFilter === 'PENDING' ? 'btn-primary' : 'btn-outline-secondary' %>">Pending</a>
+    <a href="/admin/reports?status=Reviewed" class="btn btn-sm <%= statusFilter === 'Reviewed' ? 'btn-primary' : 'btn-outline-secondary' %>">Reviewed</a>
+    <a href="/admin/reports?status=Resolved" class="btn btn-sm <%= statusFilter === 'Resolved' ? 'btn-primary' : 'btn-outline-secondary' %>">Resolved</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>Reporter</th><th>Reported</th><th>Reason</th><th>Status</th><th>Date</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <% reports.forEach(r => {
+             const rep = r.reporter, tgt = r.reported;
+             const repAvatar = (rep.minime && rep.minime[0] && rep.minime[0].avatarUrl) || null;
+             const tgtAvatar = (tgt.minime && tgt.minime[0] && tgt.minime[0].avatarUrl) || null;
+             const repName = [rep.firstName, rep.lastName].filter(Boolean).join(' ') || rep.username;
+             const tgtName = [tgt.firstName, tgt.lastName].filter(Boolean).join(' ') || tgt.username;
+             const repInit = (repName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+             const tgtInit = (tgtName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        %>
+          <tr>
+            <td>
+              <a href="/admin/users/<%= rep.id %>" class="user-cell">
+                <% if (repAvatar) { %><img src="<%= repAvatar %>" class="user-avatar" alt=""><% } else { %><span class="user-avatar-fallback"><%= repInit %></span><% } %>
+                <span class="user-name"><%= rep.username %></span>
+              </a>
+            </td>
+            <td>
+              <a href="/admin/users/<%= tgt.id %>" class="user-cell">
+                <% if (tgtAvatar) { %><img src="<%= tgtAvatar %>" class="user-avatar" alt=""><% } else { %><span class="user-avatar-fallback"><%= tgtInit %></span><% } %>
+                <span class="user-name"><%= tgt.username %></span>
+              </a>
+            </td>
+            <td><%= r.reason || '-' %></td>
+            <td>
+              <% if (r.status === 'PENDING') { %>
+                <span class="badge badge-pending">Pending</span>
+              <% } else if (r.status === 'Reviewed') { %>
+                <span class="badge badge-reviewed">Reviewed</span>
+              <% } else { %>
+                <span class="badge badge-resolved">Resolved</span>
+              <% } %>
+            </td>
+            <td><%= r.createdAt.toLocaleDateString() %></td>
+            <td>
+              <div class="report-actions">
+                <form method="POST" action="/admin/reports/<%= r.id %>/status">
+                  <input type="hidden" name="status" value="Reviewed">
+                  <button class="report-action">Review</button>
+                </form>
+                <form method="POST" action="/admin/reports/<%= r.id %>/status">
+                  <input type="hidden" name="status" value="Resolved">
+                  <button class="report-action">Resolve</button>
+                </form>
+                <form method="POST" action="/admin/reports/<%= r.id %>/action">
+                  <input type="hidden" name="targetUserId" value="<%= tgt.id %>">
+                  <input type="hidden" name="action" value="warn">
+                  <button class="report-action is-warn" data-confirm="Send a warning to this user?">Warn</button>
+                </form>
+                <% if (tgt.isBanned) { %>
+                  <form method="POST" action="/admin/reports/<%= r.id %>/action">
+                    <input type="hidden" name="targetUserId" value="<%= tgt.id %>">
+                    <input type="hidden" name="action" value="unban">
+                    <button class="report-action is-unban" data-confirm="Unban this user?">Unban</button>
+                  </form>
+                <% } else { %>
+                  <form method="POST" action="/admin/reports/<%= r.id %>/action">
+                    <input type="hidden" name="targetUserId" value="<%= tgt.id %>">
+                    <input type="hidden" name="action" value="ban">
+                    <button class="report-action is-ban" data-confirm="Ban this user?">Ban</button>
+                  </form>
+                <% } %>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (reports.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No reports found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

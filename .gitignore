@@ -1,0 +1,12 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+uploads
+prisma/schema-prisma.txt
+prisma/schema.prisma.txt
+
+# OS junk
+.DS_Store
+.claude/scheduled_tasks.lock

@@ -1,0 +1,563 @@
+/* ============================================================
+   OutSpot Admin — dark theme
+   Built on Bootstrap 5.3 dark mode (data-bs-theme="dark" on <html>).
+   We override Bootstrap's theme tokens + add brand components.
+   ============================================================ */
+
+:root {
+  --os-bg:          #0a0a0c;
+  --os-surface:     #131316;
+  --os-surface-2:   #1a1a1f;
+  --os-border:      rgba(255, 255, 255, 0.07);
+  --os-border-2:    rgba(255, 255, 255, 0.10);
+  --os-text:        #e8e8ec;
+  --os-muted:       #8b8b94;
+  --os-grad:        linear-gradient(135deg, #a855f7, #ec4899);
+  --os-grad-active: linear-gradient(135deg, #f5365c, #fb6f47);
+  --os-pink:        #ec4899;
+  --os-purple:      #a855f7;
+}
+
+[data-bs-theme="dark"] {
+  --bs-body-bg:        var(--os-bg);
+  --bs-body-color:     var(--os-text);
+  --bs-border-color:   var(--os-border);
+  --bs-secondary-color: var(--os-muted);
+  --bs-emphasis-color: #fff;
+}
+
+/* Tell the browser this is a dark UI → native scrollbars (and form controls)
+   render dark instead of showing a WHITE track behind the thumb. */
+html { color-scheme: dark; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: var(--os-bg);
+  color: var(--os-text);
+  letter-spacing: -0.01em;
+}
+
+/* Independent-scroll shell: the page itself never scrolls; the sidebar and the
+   main content each scroll on their own inside a fixed 100vh frame. */
+.admin-shell { height: 100vh; overflow: hidden; }
+.admin-main-col { height: 100vh; overflow: hidden; min-width: 0; }
+/* min-height:0 is REQUIRED — without it a flex child grows to content height and
+   the overflow never scrolls (content gets clipped instead). */
+.admin-main { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* Slim, subtle custom scrollbars (everywhere) to match the design.
+   IMPORTANT: setting `scrollbar-width` on an element makes Chromium IGNORE the
+   ::-webkit-scrollbar styling for it (the two are mutually exclusive in Chrome
+   121+), which falls back to the fat native bar with arrows. So we keep
+   `scrollbar-width` on <html> only (Firefox fallback) and let WebKit drive
+   Chrome/Edge everywhere else. */
+html { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.30);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* ---------------- Cards ---------------- */
+.card {
+  background: var(--os-surface);
+  border: 1px solid var(--os-border);
+  border-radius: 14px;
+}
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--os-border);
+  font-weight: 600;
+}
+
+/* ---------------- Sidebar ---------------- */
+.admin-sidebar {
+  width: 256px;
+  height: 100vh;
+  flex-shrink: 0;
+  background: #0c0c0f;
+  border-right: 1px solid var(--os-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* The nav scrolls on its own → its scrollbar sits at the sidebar's right edge
+   (the "middle" of the layout), independent of the main content scrollbar. */
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 12px;
+}
+.sidebar-signout {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--os-border);
+  color: #c9c9d2;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.sidebar-signout i { font-size: 1.05rem; }
+.sidebar-signout:hover { color: #fff; background: rgba(255, 255, 255, 0.04); }
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px 14px;
+  flex-shrink: 0;
+}
+.sidebar-brand .brand-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  /* Dark gradient backdrop so the colourful pin logo stands out. */
+  background: linear-gradient(135deg, #3f0a5e, #1c001f);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 4px;
+  color: #fff;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.sidebar-brand .brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.sidebar-brand .brand-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: #fff;
+}
+.sidebar-brand .brand-tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--os-grad-active);
+}
+
+.sidebar-section {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--os-muted);
+  padding: 16px 10px 6px;
+}
+
+.admin-sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: 10px;
+  margin-bottom: 2px;
+  padding: 9px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #b9b9c2;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-sidebar .nav-link i {
+  font-size: 1.05rem;
+  width: 20px;
+  text-align: center;
+}
+.admin-sidebar .nav-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+.admin-sidebar .nav-link.active {
+  background: linear-gradient(135deg, #a855f7, #ec4899, #fb7185);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.30);
+}
+
+/* ---------------- Navbar (top) ---------------- */
+.admin-navbar {
+  background: var(--os-bg);
+  border-bottom: 1px solid var(--os-border);
+  padding: 14px 28px;
+}
+
+/* ---------------- Page heading ---------------- */
+.page-title {
+  font-weight: 800;
+  font-size: 1.7rem;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.page-subtitle {
+  color: var(--os-muted);
+  font-size: 0.9rem;
+  margin-bottom: 0;
+}
+
+/* ---------------- Stat cards (dashboard) ---------------- */
+.stat-card {
+  display: block;
+  background: var(--os-surface);
+  border: 1px solid var(--os-border);
+  border-radius: 16px;
+  padding: 20px;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+/* Clickable stat cards (anchors) — lift + purple edge on hover. */
+a.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--os-purple);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.4);
+}
+.stat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.stat-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--os-grad);
+  color: #fff;
+  font-size: 1.25rem;
+}
+.stat-trend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.stat-trend.up   { color: #34d399; }
+.stat-trend.down { color: #fb7185; }
+.stat-trend.flat { color: var(--os-muted); }
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+}
+.stat-label {
+  color: var(--os-muted);
+  font-size: 0.85rem;
+  margin-top: 3px;
+}
+
+/* ---------------- Tables ---------------- */
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--os-text);
+  margin-bottom: 0;
+}
+.table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--os-muted);
+  font-weight: 600;
+  border-color: var(--os-border);
+}
+.table td {
+  border-color: var(--os-border);
+  vertical-align: middle;
+}
+.table-hover > tbody > tr:hover > * {
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
+}
+
+/* ---------------- Activity / list rows ---------------- */
+.activity-row {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--os-border);
+}
+.activity-row:last-child { border-bottom: 0; }
+.activity-row .meta { color: var(--os-muted); font-size: 0.8rem; }
+
+/* ---------------- Forms ---------------- */
+.form-control, .form-select {
+  background: var(--os-surface-2);
+  border-color: var(--os-border-2);
+  color: var(--os-text);
+}
+.form-control:focus, .form-select:focus {
+  background: var(--os-surface-2);
+  border-color: var(--os-purple);
+  box-shadow: 0 0 0 0.2rem rgba(168, 85, 247, 0.22);
+  color: var(--os-text);
+}
+
+/* ---------------- Buttons ---------------- */
+.btn-primary {
+  --bs-btn-bg: var(--os-pink);
+  --bs-btn-border-color: var(--os-pink);
+  --bs-btn-hover-bg: #db2777;
+  --bs-btn-hover-border-color: #db2777;
+  --bs-btn-active-bg: #db2777;
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--os-pink);
+  --bs-btn-border-color: rgba(236, 72, 153, 0.5);
+  --bs-btn-hover-bg: var(--os-pink);
+  --bs-btn-hover-border-color: var(--os-pink);
+}
+
+/* ---------------- Tab pills (e.g. Leaderboard Communities/Users) ---------------- */
+/* Bootstrap's default active pill is blue; override to the brand gradient so it
+   matches the sidebar active item and btn-gradient buttons. */
+.nav-pills {
+  --bs-nav-pills-link-active-bg: transparent;
+  gap: 0.5rem;
+}
+.nav-pills .nav-link {
+  color: var(--os-muted);
+  border-radius: 8px;
+  font-weight: 600;
+}
+.nav-pills .nav-link:hover { color: #fff; }
+.nav-pills .nav-link.active {
+  background: var(--os-grad);
+  color: #fff;
+}
+
+/* ---------------- Badges (status) ---------------- */
+/* Capsule shape + sizing matched to .status-pill so report badges look
+   identical to the status pills used on other admin pages. */
+.badge-pending, .badge-reviewed, .badge-resolved {
+  border-radius: 999px; padding: 4px 12px; font-size: 0.72rem; font-weight: 600;
+}
+.badge-pending  { background-color: #fb7185; color: #fff; }
+.badge-reviewed { background-color: #fca5a5; color: #fff; }
+.badge-resolved { background-color: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
+
+.sev-high   { background-color: rgba(245, 54, 92, 0.20);  color: #fb7185; }
+.sev-medium { background-color: rgba(251, 146, 60, 0.20); color: #fb923c; }
+.sev-low    { background-color: rgba(148, 163, 184, 0.20); color: #cbd5e1; }
+
+/* ---------------- Media helpers (kept from before) ---------------- */
+.avatar-sm { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.avatar-lg { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
+.shop-img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; background: var(--os-surface-2); }
+.submission-img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; }
+
+/* Legacy metric-card (still used by any non-migrated page) */
+.metric-card .metric-value { font-size: 1.75rem; font-weight: 700; }
+.metric-card .metric-label { font-size: 0.8rem; text-transform: uppercase; color: var(--os-muted); letter-spacing: 0.5px; }
+
+/* Gradient pill button (Export CSV, Save, Apply) — pink → purple per design */
+.btn-gradient {
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 9px 18px;
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.32);
+}
+.btn-gradient:hover { color: #fff; filter: brightness(1.06); }
+/* Warm gradient pill (orange→amber) — e.g. the place time-multiplier CTA */
+.btn-gradient-warm { background: linear-gradient(135deg, #fb6f47, #fbbf24); border: none; color: #fff; font-weight: 600; }
+.btn-gradient-warm:hover { color: #fff; filter: brightness(1.06); }
+
+/* Avatar + name cell in tables. Full-body minimes show whole figure:
+   rounded square + object-fit:contain (no cropping). */
+.user-cell { display: flex; align-items: center; gap: 12px; }
+.user-avatar {
+  width: 48px; height: 56px; border-radius: 12px;
+  object-fit: contain; object-position: center bottom; flex-shrink: 0;
+  background: var(--os-surface-2);
+}
+.user-avatar-fallback {
+  width: 48px; height: 56px; border-radius: 12px;
+  display: grid; place-items: center; flex-shrink: 0;
+  background: var(--os-grad); color: #fff; font-weight: 700; font-size: 0.95rem;
+}
+/* Taller rows so the full avatar has room to breathe */
+.table td { padding-top: 0.7rem; padding-bottom: 0.7rem; }
+.user-name { font-weight: 600; color: #fff; line-height: 1.15; }
+.user-email { color: var(--os-muted); font-size: 0.8rem; }
+
+/* Community thumbnails */
+.community-thumb { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.community-thumb-fallback {
+  width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--os-grad); color: #fff;
+}
+.community-hero { width: 72px; height: 72px; border-radius: 14px; object-fit: cover; font-size: 1.5rem; }
+
+/* Profile avatar + generated-minime gallery (user detail page) */
+.profile-avatar {
+  width: 110px; height: 130px; object-fit: contain;
+  border-radius: 16px; background: var(--os-surface-2);
+  border: 1px solid var(--os-border);
+}
+.profile-avatar-fallback {
+  display: inline-grid; place-items: center;
+  width: 110px; height: 130px; border-radius: 16px;
+  background: var(--os-grad); color: #fff; font-size: 1.8rem; font-weight: 700;
+}
+.minime-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 12px;
+}
+.minime-thumb {
+  position: relative; display: block; overflow: hidden;
+  border-radius: 12px; aspect-ratio: 3 / 4;
+  background: var(--os-surface-2); border: 1px solid var(--os-border);
+}
+.minime-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.minime-thumb.is-current { border-color: var(--os-pink); box-shadow: 0 0 0 1px var(--os-pink); }
+.minime-badge {
+  position: absolute; bottom: 4px; left: 4px; right: 4px;
+  text-align: center; font-size: 0.6rem; font-weight: 700;
+  background: var(--os-grad); color: #fff; border-radius: 6px; padding: 2px 0;
+}
+
+/* Action section sub-labels (user detail) */
+.action-label {
+  font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: #fff; font-weight: 700;
+}
+/* Each admin action grouped in its own subtle box for clarity */
+.action-block {
+  background: var(--os-surface-2);
+  border: 1px solid var(--os-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.form-label-sm {
+  font-size: 0.72rem; color: var(--os-muted);
+  margin-bottom: 3px; display: block;
+}
+/* Grant-item image preview + small inventory thumbnails */
+.grant-item-preview {
+  width: 40px; height: 40px; border-radius: 8px; object-fit: contain;
+  background: var(--os-surface-2); border: 1px solid var(--os-border); flex-shrink: 0;
+}
+.grant-item-preview-empty { display: grid; place-items: center; color: var(--os-muted); }
+
+/* Visual item picker — dropdown showing item image + name + search */
+.item-picker { position: relative; }
+.item-picker-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--os-surface); border: 1px solid var(--os-border-2);
+  border-radius: 8px; padding: 6px 10px; color: var(--os-text); cursor: pointer;
+}
+.item-picker-toggle:hover { border-color: var(--os-purple); }
+.item-picker-selected { display: flex; align-items: center; gap: 8px; overflow: hidden; min-width: 0; }
+.item-picker-selected .user-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-picker-menu {
+  display: none; position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--os-surface); border: 1px solid var(--os-border-2); border-radius: 10px;
+  padding: 8px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+.item-picker-menu.open { display: block; }
+.item-picker-search { margin-bottom: 8px; }
+.item-picker-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.item-picker-option {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: transparent; border: none; border-radius: 8px; padding: 6px 8px;
+  color: var(--os-text); cursor: pointer;
+}
+.item-picker-option:hover { background: rgba(255, 255, 255, 0.06); }
+.item-picker-name { font-size: 0.85rem; line-height: 1.2; }
+.shop-img-sm {
+  width: 38px; height: 38px; border-radius: 8px; object-fit: contain;
+  background: var(--os-surface-2); border: 1px solid var(--os-border);
+}
+
+/* Status pills — consistent across the whole panel */
+.status-pill { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+.status-active   { background: #fb7185; color: #fff; }
+.status-inactive { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
+.status-blocked  { background: #e11d48; color: #fff; }
+.status-pending  { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.22); }
+.status-accepted { background: #fb7185; color: #fff; }
+
+/* Friendship filter pills — colours mirror the status pills above:
+   All = brand gradient, Pending = ghost/white, Accepted = coral. Inactive
+   states fall back to a subtle muted outline. */
+.filter-pill {
+  border: 1px solid var(--os-border-2); color: var(--os-muted);
+  background: transparent;
+}
+.filter-pill:hover { color: #fff; border-color: rgba(255, 255, 255, 0.22); }
+.filter-pill.active-all      { background: var(--os-grad); color: #fff; border-color: transparent; }
+.filter-pill.active-pending  { background: rgba(255, 255, 255, 0.08); color: #fff; border-color: rgba(255, 255, 255, 0.45); }
+.filter-pill.active-accepted { background: #fb7185; color: #fff; border-color: transparent; }
+.status-declined { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+.status-featured { background: rgba(168, 85, 247, 0.18); color: #c084fc; }
+
+/* Icon action states (e.g. challenge feature star / power toggle) */
+.row-action.star-on  { color: #fbbf24; border-color: rgba(251, 191, 36, 0.40); }
+.row-action.power-on { color: #34d399; border-color: rgba(52, 211, 153, 0.40); }
+/* Destructive icon action (e.g. delete) — stays muted until hovered, then red */
+.row-action.danger:hover { color: #fb7185; border-color: rgba(245, 54, 92, 0.40); background: rgba(245, 54, 92, 0.08); }
+
+/* Inline text actions for the reports table (Review / Resolve / Warn / Ban) */
+.report-actions { display: flex; gap: 1.1rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.report-actions form { display: inline; margin: 0; }
+.report-action {
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  font-weight: 600; font-size: 0.85rem; color: #fff; text-decoration: none;
+}
+.report-action:hover     { color: #fff; }
+.report-action.is-warn:hover  { color: #fbbf24; }
+.report-action.is-ban:hover   { color: #fb7185; }
+.report-action.is-unban:hover { color: #34d399; }
+
+.row-action {
+  display: inline-grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  color: #fff; border: 1px solid var(--os-border);
+  background: transparent; cursor: pointer; padding: 0;
+}
+.row-action:hover { color: #fff; border-color: var(--os-border-2); background: rgba(255,255,255,0.04); }
+
+/* Plain white text button that turns amber on hover/click (e.g. Unblock) */
+.btn-unblock {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.btn-unblock:hover, .btn-unblock:active, .btn-unblock:focus { color: #fbbf24; }
+
+/* A touch more breathing room on the sides so wide tables don't hug the edge */
+main.p-4 { padding-left: 2rem; padding-right: 2.25rem; }
+
+/* Links read as white text by default; pink only on hover (brand accent).
+   Keeps table usernames / list links clean instead of all-pink. */
+a { color: var(--os-text); text-decoration: none; }
+a:hover { color: var(--os-pink); }
+code { color: #f0abfc; }

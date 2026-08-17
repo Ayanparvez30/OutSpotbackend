@@ -1,0 +1,39 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Multipliers</h1>
+    <p class="page-subtitle">Active point multipliers</p>
+  </div>
+  <a href="/admin/points/multipliers/create" class="btn btn-gradient"><i class="bi bi-plus-lg me-1"></i>Create</a>
+</div>
+
+<div class="d-flex justify-content-end mb-3 flex-wrap gap-2">
+  <a href="/admin/points/ledger" class="btn btn-sm btn-outline-secondary">Points Ledger</a>
+  <a href="/admin/points/bundles" class="btn btn-sm btn-outline-secondary">Bundles</a>
+  <a href="/admin/points/purchases" class="btn btn-sm btn-outline-secondary">Purchases</a>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>ID</th><th>Product ID</th><th>Apple SKU</th><th>Google SKU</th><th>Factor</th><th>Hours</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        <% products.forEach(p => { %>
+          <tr>
+            <td><%= p.id %></td>
+            <td><%= p.productId %></td>
+            <td><%= p.appleProductId || '-' %></td>
+            <td><%= p.googleProductId || '-' %></td>
+            <td><%= p.factor %>x</td>
+            <td><%= p.hours %>h</td>
+            <td><a href="/admin/points/multipliers/<%= p.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a></td>
+          </tr>
+        <% }) %>
+        <% if (products.length === 0) { %>
+          <tr><td colspan="7" class="text-center text-muted py-3">No multiplier products.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>

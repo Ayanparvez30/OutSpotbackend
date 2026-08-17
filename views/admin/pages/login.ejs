@@ -1,0 +1,117 @@
+<style>
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(60% 50% at 80% 0%, rgba(168, 85, 247, 0.22), transparent 60%),
+      radial-gradient(55% 45% at 10% 100%, rgba(236, 72, 153, 0.16), transparent 60%),
+      var(--os-bg, #0a0a0c);
+  }
+  /* auth layout wraps everything in .container — turn it into a full-height centerer */
+  body > .container {
+    max-width: 480px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .login-card {
+    width: 100%;
+    background: linear-gradient(180deg, #16151b, #111016);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 22px;
+    padding: 40px 36px 34px;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(168, 85, 247, 0.06);
+  }
+
+  .login-brand { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .login-logo {
+    width: 68px; height: 68px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #3f0a5e, #1c001f);
+    display: grid; place-items: center;
+    padding: 9px;
+    box-shadow: 0 10px 26px rgba(126, 28, 205, 0.35);
+    margin-bottom: 16px;
+  }
+  .login-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+  .login-word { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.4px; line-height: 1; display: flex; align-items: center; gap: 9px; }
+  .lw-out { color: #fff; font-weight: 600; }
+  .lw-spot {
+    background: linear-gradient(95deg, #ec4faf 0%, #fb7185 60%, #fb8c5a 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .login-tag {
+    font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em;
+    padding: 3px 9px; border-radius: 7px; color: #fff;
+    background: linear-gradient(135deg, #f5365c, #fb6f47);
+    align-self: center;
+  }
+  .login-sub { text-align: center; color: #8b909c; margin: 12px 0 28px; font-size: 0.95rem; }
+
+  .login-label { display: block; font-size: 0.82rem; font-weight: 600; color: #b8bdc9; margin: 0 0 7px; }
+  .login-field {
+    display: flex; align-items: center; gap: 10px;
+    background: #0e0d12;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+    padding: 0 14px;
+    margin-bottom: 18px;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+  .login-field i { color: #6f7480; font-size: 1.05rem; flex-shrink: 0; }
+  .login-field input {
+    flex: 1; background: none; border: none; outline: none;
+    color: #fff; font-size: 0.98rem; padding: 13px 0;
+  }
+  .login-field input::placeholder { color: #565b66; }
+  .login-field:focus-within {
+    border-color: #a855f7;
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+  }
+  .login-field:focus-within i { color: #c084fc; }
+
+  .login-btn {
+    width: 100%; border: none; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    padding: 14px; margin-top: 6px;
+    border-radius: 12px; color: #fff; font-weight: 700; font-size: 1rem;
+    background: linear-gradient(100deg, #ff5b9e 0%, #c14ff0 55%, #9b6bff 100%);
+    box-shadow: 0 12px 30px rgba(193, 79, 240, 0.4);
+    transition: filter 0.16s ease, transform 0.16s ease;
+  }
+  .login-btn:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .login-btn i { transition: transform 0.16s ease; }
+  .login-btn:hover i { transform: translateX(3px); }
+
+  .login-foot { margin-top: 22px; color: #5a5f6a; font-size: 0.8rem; text-align: center; }
+</style>
+
+<div class="login-card">
+  <div class="login-brand">
+    <span class="login-logo"><img src="/admin/assets/img/logo.svg" alt="OutSpot"></span>
+    <div class="login-word"><span class="lw-out">Out</span><span class="lw-spot">Spot</span><span class="login-tag">ADMIN</span></div>
+  </div>
+  <p class="login-sub">Sign in to your admin dashboard</p>
+
+  <form method="POST" action="/admin/login">
+    <label class="login-label" for="username">Username or Email</label>
+    <div class="login-field">
+      <i class="bi bi-person"></i>
+      <input type="text" id="username" name="username" placeholder="you@outspot.app" required autofocus>
+    </div>
+
+    <label class="login-label" for="password">Password</label>
+    <div class="login-field">
+      <i class="bi bi-lock"></i>
+      <input type="password" id="password" name="password" placeholder="••••••••" required>
+    </div>
+
+    <button type="submit" class="login-btn">Log In <i class="bi bi-arrow-right"></i></button>
+  </form>
+</div>
+
+<div class="login-foot">© OutSpot · Admin Panel</div>

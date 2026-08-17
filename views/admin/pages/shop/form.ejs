@@ -1,0 +1,194 @@
+<%
+  const isFreeItem = item ? (!item.appleProductId && !item.googleProductId) : false;
+  const currentGender = item && item.gender ? item.gender : 'masculine';
+%>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <strong><%= item ? 'Edit Shop Item' : 'Create Shop Item' %></strong>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="<%= item ? `/admin/shop/${item.id}/edit` : '/admin/shop/create' %>" enctype="multipart/form-data">
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" name="isFree" class="form-check-input" id="isFree"
+                   <%= isFreeItem ? 'checked' : '' %>>
+            <label class="form-check-label" for="isFree"><strong>Free Item</strong> (no IAP required)</label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Gender</label>
+            <select name="gender" class="form-select" required id="genderSelect">
+              <option value="masculine" <%= currentGender === 'masculine' ? 'selected' : '' %>>Masculine</option>
+              <option value="feminine"  <%= currentGender === 'feminine'  ? 'selected' : '' %>>Feminine</option>
+              <% if (!item) { %>
+              <option value="both">Both (creates one for each)</option>
+              <% } %>
+            </select>
+            <% if (!item) { %>
+            <small class="text-muted" id="bothHint" style="display:none">
+              Creates two items at once — one Masculine and one Feminine.
+            </small>
+            <% } %>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Category (Slot)</label>
+            <select name="slot" class="form-select" required id="slotSelect"
+                    data-current="<%= item ? item.slot : '' %>">
+              <!-- populated by JS based on gender -->
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Image Upload</label>
+            <input type="file" name="imageFile" class="form-control" accept="image/*">
+            <small class="text-muted">Upload an image, or paste a URL below instead.</small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Image URL <small class="text-muted">(optional if file uploaded)</small></label>
+            <input type="text" name="imageUrl" class="form-control" value="<%= item ? item.imageUrl : '' %>" placeholder="https://cdn.example.com/image.png">
+            <% if (item && item.imageUrl) { %>
+              <img src="<%= item.imageUrl %>" class="shop-img mt-2" alt="preview" style="max-height:100px">
+            <% } %>
+          </div>
+
+          <div id="paidFields">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input type="text" name="name" class="form-control" value="<%= item ? item.name : '' %>" id="nameField">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Brand</label>
+              <input type="text" name="brand" class="form-control" value="<%= item && item.brand ? item.brand : '' %>">
+            </div>
+            <div class="row mb-3">
+              <div class="col">
+                <label class="form-label" id="appleLabel">Apple Product ID</label>
+                <input type="text" name="appleProductId" class="form-control" value="<%= item && item.appleProductId ? item.appleProductId : '' %>" placeholder="com.outspot.item_123">
+              </div>
+              <div class="col">
+                <label class="form-label" id="googleLabel">Google Product ID</label>
+                <input type="text" name="googleProductId" class="form-control" value="<%= item && item.googleProductId ? item.googleProductId : '' %>" placeholder="com.outspot.item_123">
+              </div>
+            </div>
+            <% if (!item) { %>
+            <!-- Second set of product IDs, shown only when gender = Both (for the Feminine item). -->
+            <div class="row mb-3" id="productIdRowF" style="display:none">
+              <div class="col">
+                <label class="form-label">Apple Product ID <span class="text-muted">(Feminine)</span></label>
+                <input type="text" name="appleProductIdF" class="form-control" placeholder="com.outspot.item_123_f">
+              </div>
+              <div class="col">
+                <label class="form-label">Google Product ID <span class="text-muted">(Feminine)</span></label>
+                <input type="text" name="googleProductIdF" class="form-control" placeholder="com.outspot.item_123_f">
+              </div>
+            </div>
+            <% } %>
+            <div class="mb-3 form-check">
+              <input type="checkbox" name="isFeatured" class="form-check-input" id="isFeatured" <%= item && item.isFeatured ? 'checked' : '' %>>
+              <label class="form-check-label" for="isFeatured">Featured</label>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><%= item ? 'Update' : 'Create' %></button>
+            <a href="/admin/shop" class="btn btn-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GENDER_SLOTS = {
+    masculine: [
+      { value: 'TOP',     label: 'Top (shirt)' },
+      { value: 'BOTTOM',  label: 'Bottom (pants)' },
+      { value: 'SHOES',   label: 'Shoes' },
+      { value: 'GLASSES', label: 'Glasses' },
+      { value: 'WATCH',   label: 'Watch' },
+    ],
+    feminine: [
+      { value: 'TOP',      label: 'Top' },
+      { value: 'BOTTOM',   label: 'Bottom' },
+      { value: 'SHOES',    label: 'Shoes' },
+      { value: 'GLASSES',  label: 'Glasses' },
+      { value: 'WATCH',    label: 'Watch' },
+      { value: 'PURSE',    label: 'Bag (purse)' },
+      { value: 'ORNAMENT', label: 'Necklace (ornament)' },
+      { value: 'MAKEUP',   label: 'Lipstick (makeup)' },
+    ],
+    // "Both" can only use slots that exist for masculine AND feminine.
+    both: [
+      { value: 'TOP',     label: 'Top (shirt)' },
+      { value: 'BOTTOM',  label: 'Bottom (pants)' },
+      { value: 'SHOES',   label: 'Shoes' },
+      { value: 'GLASSES', label: 'Glasses' },
+      { value: 'WATCH',   label: 'Watch' },
+    ],
+  };
+
+  const genderSelect = document.getElementById('genderSelect');
+  const slotSelect = document.getElementById('slotSelect');
+  const isFreeCheckbox = document.getElementById('isFree');
+  const paidFields = document.getElementById('paidFields');
+  const nameField = document.getElementById('nameField');
+
+  function populateSlots(preserveValue) {
+    const gender = genderSelect.value;
+    const opts = GENDER_SLOTS[gender] || [];
+    const previous = preserveValue || slotSelect.value || slotSelect.dataset.current;
+    slotSelect.innerHTML = '';
+    opts.forEach(o => {
+      const el = document.createElement('option');
+      el.value = o.value;
+      el.textContent = o.label;
+      if (previous && previous === o.value) el.selected = true;
+      slotSelect.appendChild(el);
+    });
+    // Preserve legacy slot (e.g. ACCESSORY) when editing existing items
+    const legacy = slotSelect.dataset.current;
+    if (legacy && !opts.some(o => o.value === legacy)) {
+      const el = document.createElement('option');
+      el.value = legacy;
+      el.textContent = legacy + ' (legacy)';
+      el.selected = true;
+      slotSelect.appendChild(el);
+    }
+  }
+
+  function toggleFields() {
+    if (isFreeCheckbox.checked) {
+      paidFields.style.display = 'none';
+      nameField.removeAttribute('required');
+    } else {
+      paidFields.style.display = '';
+      nameField.setAttribute('required', 'required');
+    }
+  }
+
+  function toggleBothHint() {
+    const isBoth = genderSelect.value === 'both';
+    const hint = document.getElementById('bothHint');
+    if (hint) hint.style.display = isBoth ? '' : 'none';
+    // Show the Feminine product-ID row and tag the first row as Masculine.
+    const rowF = document.getElementById('productIdRowF');
+    if (rowF) rowF.style.display = isBoth ? '' : 'none';
+    const appleLabel = document.getElementById('appleLabel');
+    const googleLabel = document.getElementById('googleLabel');
+    if (appleLabel) appleLabel.innerHTML = isBoth
+      ? 'Apple Product ID <span class="text-muted">(Masculine)</span>' : 'Apple Product ID';
+    if (googleLabel) googleLabel.innerHTML = isBoth
+      ? 'Google Product ID <span class="text-muted">(Masculine)</span>' : 'Google Product ID';
+  }
+
+  genderSelect.addEventListener('change', () => { populateSlots(); toggleBothHint(); });
+  isFreeCheckbox.addEventListener('change', toggleFields);
+
+  populateSlots(slotSelect.dataset.current);
+  toggleFields();
+  toggleBothHint();
+</script>

@@ -1,0 +1,72 @@
+<%
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function userCellHtml(u){
+    if (!u) return '-';
+    const av = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+    const nm = u.username;
+    const initials = (nm || '?').trim().slice(0, 2).toUpperCase();
+    const img = av
+      ? `<img src="${esc(av)}" class="user-avatar" alt="">`
+      : `<span class="user-avatar-fallback">${esc(initials)}</span>`;
+    return `<a href="/admin/users/${u.id}" class="user-cell">${img}<span class="user-name">@${esc(nm)}</span></a>`;
+  }
+  function subPill(s){
+    const map = { PENDING: 'status-pending', PASSED: 'status-accepted', ACCEPTED: 'status-accepted', VERIFIED: 'status-accepted', FAILED: 'status-blocked', REJECTED: 'status-blocked' };
+    const cls = map[s] || 'status-inactive';
+    const label = s ? s.charAt(0) + s.slice(1).toLowerCase() : '-';
+    return `<span class="status-pill ${cls}">${label}</span>`;
+  }
+  function pillBtn(label, val){
+    const active = statusFilter === val;
+    const cls = active ? 'btn-primary' : 'btn-outline-secondary';
+    const href = val ? `/admin/challenges/submissions?status=${val}` : '/admin/challenges/submissions';
+    return `<a href="${href}" class="btn btn-sm ${cls}">${label}</a>`;
+  }
+%>
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Submissions</h1>
+    <p class="page-subtitle">All challenge photo submissions</p>
+  </div>
+  <a href="/admin/challenges" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Challenges</a>
+</div>
+
+<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+  <span class="text-muted me-1"><%= total %> submissions</span>
+  <%- pillBtn('All', '') %>
+  <%- pillBtn('Pending', 'PENDING') %>
+  <%- pillBtn('Passed', 'PASSED') %>
+  <%- pillBtn('Failed', 'FAILED') %>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>User</th><th>Challenge</th><th>Media</th><th>Status</th><th>Reason</th><th>Submitted</th></tr>
+      </thead>
+      <tbody>
+        <% submissions.forEach(s => { %>
+          <tr>
+            <td><%- userCellHtml(s.user) %></td>
+            <td><%= s.challenge ? s.challenge.title : '-' %></td>
+            <td>
+              <% if (s.mediaUrl) { %>
+                <a href="<%= s.mediaUrl %>" target="_blank"><img src="<%= s.mediaUrl %>" class="submission-img" alt="submission"></a>
+              <% } else { %>-<% } %>
+            </td>
+            <td><%- subPill(s.verificationStatus) %></td>
+            <td class="text-secondary small"><%= s.rejectionReason || '-' %></td>
+            <td><%= s.createdAt.toLocaleDateString() %></td>
+          </tr>
+        <% }) %>
+        <% if (submissions.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No submissions found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

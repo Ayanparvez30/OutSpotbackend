@@ -1,0 +1,1899 @@
+// controllers/friendController.js
+const { PrismaClient } = require('@prisma/client');
+const nodemailer = require('nodemailer');
+const prisma = new PrismaClient();
+const { notifyUser } = require('../utils/notificationService');
+const { deleteS3IfOrphanBulk } = require('../utils/s3Cleanup');
+const realtime = require('../utils/realtime');
+
+// ✅ NEW: single source of truth for weekly points (sums pointsLedger.finalPoints since Monday)
+const {
+  getWeeklyPointsForUsers,
+  getWeeklyPointsForUser,
+} = require('../utils/weeklyPoints');
+
+// -------------------- helpers --------------------
+const firstAvatar = (minimeArr) =>
+  Array.isArray(minimeArr) && minimeArr.length > 0
+    ? (minimeArr[0]?.avatarUrl || "")
+    : "";
+
+// Batched: for a viewer and a list of target user ids, return a Map of
+// id -> friendshipStatus computed RELATIVE TO THE VIEWER.
+// Status: "SELF" | "ACCEPTED" | "PENDING_SENT" | "PENDING_RECEIVED" | "NONE".
+// One query for the whole list — used to badge friend-of-friend lists, search, etc.
+async function getViewerFriendshipStatusMap(viewerId, targetIds) {
+  const map = new Map();
+  const others = [...new Set(targetIds)].filter((id) => id !== viewerId);
+  // Default everyone to NONE; the viewer themselves is SELF.
+  for (const id of targetIds) {
+    map.set(id, id === viewerId ? "SELF" : "NONE");
+  }
+  if (others.length === 0) return map;
+
+  const links = await prisma.friendship.findMany({
+    where: {
+      OR: [
+        { requesterId: viewerId, receiverId: { in: others } },
+        { receiverId: viewerId, requesterId: { in: others } },
+      ],
+    },
+    select: { requesterId: true, receiverId: true, status: true },
+  });
+
+  for (const fr of links) {
+    const otherId = fr.requesterId === viewerId ? fr.receiverId : fr.requesterId;
+    if (fr.status === "ACCEPTED") {
+      map.set(otherId, "ACCEPTED");
+    } else if (fr.status === "PENDING") {
+      map.set(
+        otherId,
+        fr.requesterId === viewerId ? "PENDING_SENT" : "PENDING_RECEIVED"
+      );
+    }
+  }
+  return map;
+}
+
+const REASON_RANK = { CONTACT: 5, MUTUAL: 4, COMMUNITY: 3, POPULAR: 2, NEW_USER: 1 };
+
+// Edit distance (typo tolerance) — small strings only.
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// Best fuzzy similarity (0..1) of `token` against a field — substring = 1,
+// else slides the token across the field and uses 1 - editDistance/len, so a
+// typo'd "sohana" still scores high against "shohana".
+function fuzzyTokenSim(token, field) {
+  if (!token || !field) return 0;
+  if (field.includes(token)) return 1;
+  const tl = token.length;
+  if (field.length <= tl) {
+    return 1 - levenshtein(token, field) / Math.max(tl, field.length);
+  }
+  let best = 0;
+  for (let i = 0; i + tl <= field.length; i++) {
+    const win = field.slice(i, i + tl + 1); // allow 1 extra char (insertions)
+    const sim = 1 - levenshtein(token, win) / Math.max(tl, win.length);
+    if (sim > best) best = sim;
+    if (best === 1) break;
+  }
+  return best;
+}
+
+// Average fuzzy similarity across all query tokens (each → its best field).
+function fuzzyScore(tokens, fields) {
+  if (!tokens.length) return 0;
+  let total = 0;
+  for (const t of tokens) {
+    let tokBest = 0;
+    for (const f of fields) {
+      const s = fuzzyTokenSim(t, f);
+      if (s > tokBest) tokBest = s;
+      if (tokBest === 1) break;
+    }
+    total += tokBest;
+  }
+  return total / tokens.length;
+}
+
+const getMatchScore = (user, q) => {
+  const qLower = q.toLowerCase().trim();
+  const tokens = qLower.split(/\s+/).filter(Boolean);
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+  const fields = [user.username, user.firstName, user.lastName, fullName]
+    .filter(Boolean)
+    .map((f) => f.toLowerCase());
+
+  let score = 0;
+  // whole-query match (incl. full name) — strongest signal
+  for (const field of fields) {
+    if (field === qLower) score += 40;
+    else if (field.startsWith(qLower)) score += 30;
+    else if (field.includes(qLower)) score += 20;
+    else if (field.endsWith(qLower)) score += 10;
+  }
+  // per-word predictive match — rewards partial / multi-word typing
+  for (const t of tokens) {
+    for (const field of fields) {
+      if (field.startsWith(t)) score += 6;
+      else if (field.includes(t)) score += 3;
+    }
+  }
+  return score;
+};
+
+// -------------------- controllers --------------------
+
+// Search users (with weekly points from ledger)
+exports.searchUsers = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const query = req.query.q;
+
+  if (!query || query.length < 2) {
+    return res.status(400).json({
+      success: false,
+      message: "Search term must be at least 2 characters.",
+      data: [],
+    });
+  }
+
+  const searchTerm = query.trim().toLowerCase();
+
+  try {
+    // block list
+    const blocks = await prisma.block.findMany({
+      where: {
+        OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }],
+      },
+    });
+    const blockedIds = new Set(
+      blocks.map((b) =>
+        b.blockerId === currentUserId ? b.blockedId : b.blockerId
+      )
+    );
+
+    // communities
+    const myCommunities = await prisma.communityMember.findMany({
+      where: { userId: currentUserId },
+    });
+    const communityIds = myCommunities.map((c) => c.communityId);
+
+    const sameCommunityMembers = await prisma.communityMember.findMany({
+      where: {
+        communityId: { in: communityIds },
+        userId: { not: currentUserId },
+      },
+    });
+    const sameCommunityUserIds = new Set(
+      sameCommunityMembers.map((m) => m.userId)
+    );
+
+    // Predictive + typo-tolerant, multi-word search across username + first/last
+    // name. Each word pulls candidates via substring (contains) OR same first
+    // letter (startsWith) — the latter widens the pool so a typo'd "sohana" still
+    // fetches "shohana", which the fuzzy (edit-distance) pass below then ranks.
+    const tokens = searchTerm.split(/\s+/).filter(Boolean);
+    const tokenConditions = tokens.map((t) => {
+      const c = t[0];
+      const or = [
+        { firstName: { contains: t } },
+        { lastName: { contains: t } },
+        { username: { contains: t } },
+      ];
+      if (c) {
+        or.push({ firstName: { startsWith: c } });
+        or.push({ lastName: { startsWith: c } });
+        or.push({ username: { startsWith: c } });
+      }
+      return { OR: or };
+    });
+
+    // users (candidate pool — fuzzy-filtered after fetch)
+    const users = await prisma.user.findMany({
+      where: {
+        AND: [
+          { id: { not: currentUserId } },
+          { id: { notIn: Array.from(blockedIds) } },
+          ...tokenConditions,
+        ],
+      },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        totalPoints: true,
+        minime: {
+          select: { avatarUrl: true },
+          where: { isSaved: true },
+          orderBy: { updatedAt: 'desc' },
+        },
+      },
+      take: 200,
+    });
+
+    // batch weekly points from ledger
+    const idList = users.map((u) => u.id);
+    const weekPointsMap = await getWeeklyPointsForUsers(idList);
+
+    // enrich + score
+    const enriched = await Promise.all(
+      users.map(async (user) => {
+        const friendship = await prisma.friendship.findFirst({
+          where: {
+            OR: [
+              { requesterId: currentUserId, receiverId: user.id },
+              { requesterId: user.id, receiverId: currentUserId },
+            ],
+          },
+        });
+
+        const isMutualFriend = friendship?.status === "ACCEPTED";
+        const isInSameCommunity = sameCommunityUserIds.has(user.id);
+
+        // typo-tolerant relevance: best fuzzy similarity of the query tokens
+        // against this user's username + first/last/full name (0..1)
+        const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+        const fields = [user.username, user.firstName, user.lastName, fullName]
+          .filter(Boolean)
+          .map((f) => f.toLowerCase());
+        const fuzzy = fuzzyScore(tokens, fields);
+
+        const score =
+          getMatchScore(user, searchTerm) +
+          fuzzy * 50 +
+          (isMutualFriend ? 20 : 0) +
+          (isInSameCommunity ? 10 : 0);
+
+        return {
+          id: user.id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          avatarUrl: user.minime?.[0]?.avatarUrl || null,
+          totalPoints: user.totalPoints || 0,
+          thisWeekPoints: weekPointsMap.get(user.id) || 0,
+          friendshipStatus: friendship?.status || null,
+          profileUrl: `/api/users/${user.id}/profile`,
+          fuzzy,
+          score,
+        };
+      })
+    );
+
+    // Drop weak candidates pulled in only by the broad first-letter prefix
+    // (keep real substring hits + close ~1-edit typos), and drop nameless /
+    // non-onboarded accounts (no first/last name) so search never shows a blank
+    // row. 0.72 ≈ at most a single-character typo on a 6+ char query.
+    const FUZZY_MIN = 0.72;
+    const hasName = (u) =>
+      Boolean((u.firstName && u.firstName.trim()) || (u.lastName && u.lastName.trim()));
+    const results = enriched
+      .filter((u) => hasName(u) && (u.fuzzy >= FUZZY_MIN || getMatchScore(u, searchTerm) > 0))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 30)
+      .map(({ fuzzy, ...rest }) => rest); // drop internal field
+
+    return res.status(200).json({
+      success: true,
+      message: "Search results",
+      data: results,
+    });
+  } catch (error) {
+    console.error("Search error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to search users",
+      data: [],
+    });
+  }
+};
+
+// Send a friend request
+exports.sendFriendRequest = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const targetUserId = parseInt(req.params.userId);
+
+  if (currentUserId === targetUserId) {
+    return res.status(400).json({ error: "You cannot friend yourself." });
+  }
+
+  try {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const existing = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: currentUserId, receiverId: targetUserId },
+          { requesterId: targetUserId, receiverId: currentUserId },
+        ],
+      },
+    });
+    if (existing) {
+      return res
+        .status(400)
+        .json({ error: "Friend request already sent or users already friends." });
+    }
+
+    const blocked = await prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: currentUserId, blockedId: targetUserId },
+          { blockerId: targetUserId, blockedId: currentUserId },
+        ],
+      },
+    });
+    if (blocked) {
+      return res
+        .status(403)
+        .json({ error: "Cannot send request - one user has blocked the other." });
+    }
+
+    // Get current user's info for the notification
+    const currentUser = await prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    // Create the friend request
+    await prisma.friendship.create({
+      data: {
+        requesterId: currentUserId,
+        receiverId: targetUserId,
+        status: "PENDING",
+      },
+    });
+
+    // Build sender's full name for notification title
+    const fullName = [currentUser.firstName, currentUser.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || currentUser.username;
+
+    // Send notification to the receiver
+    try {
+      await notifyUser(
+        targetUserId,                    // recipient of the notification
+        "FRIEND_REQUEST",                // notification type
+        fullName,                        // title shows sender's FULL NAME
+        "sent you a friend request.",    // description
+        {
+          actorId: currentUserId,        // the person who sent the request
+          firstName: currentUser.firstName || "",
+          lastName: currentUser.lastName || "",
+        }
+      );
+    } catch (notificationError) {
+      console.error("Failed to send friend request notification:", notificationError);
+      // Continue with success response even if notification fails
+    }
+
+    // Realtime: receiver refreshes pending-requests badge / list
+    realtime.toUser(targetUserId, 'friend.request_received', {
+      fromUserId: currentUserId,
+    });
+
+    return res.json({ message: "Friend request sent." });
+  } catch (error) {
+    console.error("Send friend request error:", error);
+    return res.status(500).json({ error: "Failed to send friend request" });
+  }
+};
+
+
+exports.acceptFriendRequest = async (req, res) => {
+  try {
+ 
+    const receiverId = req.authData.id;
+
+    const requesterId = parseInt(req.params.userId, 10);
+
+    if (!Number.isFinite(requesterId)) {
+      return res.status(400).json({ error: "Invalid requester user id." });
+    }
+    if (receiverId === requesterId) {
+      return res.status(400).json({ error: "You cannot accept your own request." });
+    }
+
+    const friendRecord = await prisma.friendship.findFirst({
+      where: {
+        requesterId: requesterId,
+        receiverId: receiverId,
+        status: "PENDING",
+      },
+      include: { requester: true, receiver: true },
+    });
+
+    if (!friendRecord) {
+      return res.status(404).json({ error: "Friend request not found or already handled." });
+    }
+
+    if (friendRecord.status !== "ACCEPTED") {
+      await prisma.friendship.update({
+        where: { id: friendRecord.id },
+        data: { status: "ACCEPTED", acceptedAt: new Date() },
+      });
+    }
+
+
+    const actor = friendRecord.receiver; // acceptor = current user
+    const fullName =
+      [actor.firstName, actor.lastName].filter(Boolean).join(" ").trim() ||
+      actor.username;
+
+   
+    try {
+      await notifyUser(
+        requesterId,                
+        "FRIEND_ACCEPTED",
+        fullName,                    // title shows actor's name
+        "accepted your friend request.",
+        {
+          actorId: receiverId,       // critical: to fetch actor's avatar in list
+          friendId: receiverId,      // optional: helpful for deep links
+          firstName: actor.firstName || "",
+          lastName: actor.lastName || "",
+        }
+      );
+    } catch (e) {
+
+      console.error("notifyUser failed:", e);
+    }
+
+    // Eager-create the 1:1 private chat so it shows in both users' chat lists
+    // immediately (no message sent). Mirrors createPrivateChat dedupe + socket.
+    let chatId = null;
+    try {
+      const existingChats = await prisma.chat.findMany({
+        where: {
+          isGroup: false,
+          isCommunity: false,
+          OR: [
+            { name: null },
+            { NOT: { name: { startsWith: "Global Chat" } } },
+          ],
+          AND: [
+            { users: { some: { userId: receiverId } } },
+            { users: { some: { userId: requesterId } } },
+          ],
+        },
+        include: { _count: { select: { users: true } } },
+      });
+
+      const exactMatch = existingChats.find(c => c._count.users === 2);
+
+      if (exactMatch) {
+        chatId = exactMatch.id;
+        // Re-friend case: bump joinedAt for both sides so the existing chat
+        // bubbles to the top of each user's list (matches "new chat" UX).
+        await prisma.userOnChat.updateMany({
+          where: { chatId, userId: { in: [receiverId, requesterId] } },
+          data: { joinedAt: new Date() },
+        });
+      } else {
+        const chat = await prisma.chat.create({
+          data: {
+            isGroup: false,
+            users: {
+              create: [
+                { userId: receiverId, role: 'ADMIN' },
+                { userId: requesterId, role: 'ADMIN' },
+              ],
+            },
+          },
+        });
+        chatId = chat.id;
+
+        // Notify both participants via socket so they auto-add the new chat
+        try {
+          const io = require('../utils/socket').getIO();
+          io.to(`user:${receiverId}`).emit('newChat', { chatId });
+          io.to(`user:${requesterId}`).emit('newChat', { chatId });
+        } catch (socketErr) {
+          console.error("acceptFriendRequest socket notify error:", socketErr);
+        }
+      }
+    } catch (chatErr) {
+      console.error("acceptFriendRequest chat create error:", chatErr);
+    }
+
+    // Realtime: both sides refresh friend list / profile counts / map markers
+    realtime.toUsers([receiverId, requesterId], 'friend.request_accepted', {
+      friendId: receiverId,
+      otherId: requesterId,
+      chatId,
+    });
+
+    return res.json({ message: "Friend request accepted.", chatId });
+  } catch (err) {
+    console.error("acceptFriendRequest error:", err);
+    return res.status(500).json({ error: "Failed to accept friend request" });
+  }
+};
+
+
+exports.declineFriendRequest = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const otherUserId = parseInt(req.params.userId);
+
+  const friendRecord = await prisma.friendship.findFirst({
+    where: {
+      status: "PENDING",
+      OR: [
+        { requesterId: currentUserId, receiverId: otherUserId }, // cancel sent
+        { requesterId: otherUserId, receiverId: currentUserId }, // decline received
+      ],
+    },
+  });
+  if (!friendRecord) {
+    return res
+      .status(404)
+      .json({ error: "No pending friend request between these users." });
+  }
+
+  await prisma.friendship.delete({ where: { id: friendRecord.id } });
+
+  // Clear the receiver's stale "X sent you a friend request" in-app notification
+  // row so cancel reverts cleanly. FCM banner already on device is OS-managed
+  // and can't be recalled — tapping it now just opens an empty pending state.
+  // requesterId is the sender (request_received was sent TO friendRecord.receiverId
+  // with actorId=friendRecord.requesterId), so we delete on the receiver side.
+  try {
+    await prisma.notification.deleteMany({
+      where: {
+        userId: friendRecord.receiverId,
+        type: 'FRIEND_REQUEST',
+        actorId: friendRecord.requesterId,
+      },
+    });
+  } catch (cleanupErr) {
+    console.error('declineFriendRequest notification cleanup error:', cleanupErr);
+  }
+
+  // Realtime: the OTHER party silently refreshes their requests/sent list
+  realtime.toUser(otherUserId, 'friend.request_declined', {
+    byUserId: currentUserId,
+  });
+
+  return res.json({ message: "Friend request declined (or cancelled)." });
+};
+
+// Unfriend
+exports.unfriend = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const friendUserId = parseInt(req.params.userId);
+
+  const friendRecord = await prisma.friendship.findFirst({
+    where: {
+      status: "ACCEPTED",
+      OR: [
+        { requesterId: currentUserId, receiverId: friendUserId },
+        { requesterId: friendUserId, receiverId: currentUserId },
+      ],
+    },
+  });
+  if (!friendRecord) {
+    return res.status(404).json({ error: "No friendship exists with that user." });
+  }
+
+  // Find the 1:1 private chat between these two users
+  const privateChats = await prisma.chat.findMany({
+    where: {
+      isGroup: false,
+      isCommunity: false,
+      AND: [
+        { users: { some: { userId: currentUserId } } },
+        { users: { some: { userId: friendUserId } } },
+      ],
+    },
+    include: { _count: { select: { users: true } } },
+  });
+
+  // Only delete chats that have exactly these 2 users (not group chats they might share)
+  const exactPrivateChats = privateChats.filter(c => c._count.users === 2);
+  const chatIds = exactPrivateChats.map(c => c.id);
+
+  // Collect S3 image URLs from messages before deleting
+  let imageUrls = [];
+  if (chatIds.length > 0) {
+    const mediaMessages = await prisma.message.findMany({
+      where: { chatId: { in: chatIds }, imageUrl: { not: null } },
+      select: { imageUrl: true },
+    });
+    imageUrls = mediaMessages.map(m => m.imageUrl);
+  }
+
+  // Delete friendship + private chat(s) + all messages (cascade) in a transaction
+  await prisma.$transaction([
+    prisma.friendship.delete({ where: { id: friendRecord.id } }),
+    ...(chatIds.length > 0
+      ? [prisma.chat.deleteMany({ where: { id: { in: chatIds } } })]
+      : []),
+  ]);
+
+  // Orphan-only S3 cleanup — same URL might be referenced by a Story or
+  // SavedStory clone. Best-effort, non-blocking.
+  if (imageUrls.length) {
+    deleteS3IfOrphanBulk([...new Set(imageUrls)])
+      .catch(err => console.error('unfriend S3 cleanup error', err));
+  }
+
+  // Notify both users via socket so their chat list refreshes and drops the
+  // deleted chat. Reuse the existing 'messagesDeleted' event (Flutter already
+  // handles it -> fetchChats()) instead of a separate chatDeleted handler.
+  try {
+    const io = require('../utils/socket').getIO();
+    for (const cid of chatIds) {
+      io.to(`user:${currentUserId}`).emit('messagesDeleted', { chatId: cid, messageIds: [] });
+      io.to(`user:${friendUserId}`).emit('messagesDeleted', { chatId: cid, messageIds: [] });
+    }
+  } catch (_) { /* socket not ready */ }
+
+  // Realtime: both sides refresh friend list / counts / map markers
+  realtime.toUsers([currentUserId, friendUserId], 'friend.removed', {
+    otherId: friendUserId,
+    removedBy: currentUserId,
+  });
+
+  return res.json({ message: "Unfriended successfully.", deletedChatIds: chatIds });
+};
+
+// Friend list (weekly points from ledger)
+exports.getFriendList = async (req, res) => {
+  const currentUserId = req.authData.id;
+
+  const userSelect = {
+    id: true,
+    username: true,
+    firstName: true,
+    lastName: true,
+    totalPoints: true,
+    minime: {
+      select: { avatarUrl: true },
+      where: { isSaved: true },
+      orderBy: { updatedAt: "desc" },
+    },
+  };
+
+  // Fetch accepted friends + outgoing PENDING in parallel — single endpoint,
+  // single list, no merge logic on the client.
+  const [friendships, outgoingPending] = await Promise.all([
+    prisma.friendship.findMany({
+      where: {
+        status: "ACCEPTED",
+        OR: [{ requesterId: currentUserId }, { receiverId: currentUserId }],
+      },
+      include: { requester: { select: userSelect }, receiver: { select: userSelect } },
+    }),
+    prisma.friendship.findMany({
+      where: { requesterId: currentUserId, status: "PENDING" },
+      include: { receiver: { select: userSelect } },
+    }),
+  ]);
+
+  const friendsRaw = friendships.map((fr) =>
+    fr.requesterId === currentUserId ? fr.receiver : fr.requester
+  );
+  const friendIds = friendsRaw.map((f) => f.id);
+
+  const weekPointsMap = await getWeeklyPointsForUsers(friendIds);
+
+  const accepted = friendsRaw.map((friend) => ({
+    id: friend.id,
+    username: friend.username,
+    firstName: friend.firstName,
+    lastName: friend.lastName,
+    avatarUrl: friend.minime?.[0]?.avatarUrl || null,
+    totalPoints: friend.totalPoints || 0,
+    thisWeekPoints: weekPointsMap.get(friend.id) || 0,
+    profileUrl: `/api/users/${friend.id}/profile`,
+    status: "ACCEPTED",
+  }));
+
+  // Outgoing pending — same shape, status="PENDING_SENT". UI shows the
+  // "Pending accept" chip in place of the points row.
+  const pendingSent = outgoingPending.map(({ receiver: u }) => ({
+    id: u.id,
+    username: u.username,
+    firstName: u.firstName,
+    lastName: u.lastName,
+    avatarUrl: u.minime?.[0]?.avatarUrl || null,
+    totalPoints: u.totalPoints || 0,
+    thisWeekPoints: 0,
+    profileUrl: `/api/users/${u.id}/profile`,
+    status: "PENDING_SENT",
+  }));
+
+  return res.status(200).json({
+    success: true,
+    message: "Friends fetched successfully",
+    data: [...accepted, ...pendingSent],
+  });
+};
+
+// Pending friend request count
+exports.getPendingFriendRequestCount = async (req, res) => {
+  try {
+    const currentUserId = req.authData.id;
+
+    const count = await prisma.friendship.count({
+      where: {
+        receiverId: currentUserId,
+        status: "PENDING",
+      },
+    });
+
+    return res.json({ count });
+  } catch (error) {
+    console.error("Error getting pending friend request count:", error);
+    return res.status(500).json({ error: "Failed to fetch count" });
+  }
+};
+
+// Block user
+exports.blockUser = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const targetUserId = parseInt(req.params.userId);
+
+  if (currentUserId === targetUserId) {
+    return res.status(400).json({ error: "You cannot block yourself." });
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!targetUser) {
+    return res.status(404).json({ error: "User not found." });
+  }
+
+  const existing = await prisma.block.findUnique({
+    where: {
+      blockerId_blockedId: { blockerId: currentUserId, blockedId: targetUserId },
+    },
+  });
+  if (existing) {
+    return res.status(400).json({ error: "User is already blocked." });
+  }
+
+  // Find 1:1 private chats between these two users
+  const privateChats = await prisma.chat.findMany({
+    where: {
+      isGroup: false,
+      isCommunity: false,
+      AND: [
+        { users: { some: { userId: currentUserId } } },
+        { users: { some: { userId: targetUserId } } },
+      ],
+    },
+    include: { _count: { select: { users: true } } },
+  });
+  const chatIds = privateChats.filter(c => c._count.users === 2).map(c => c.id);
+
+  // Collect S3 image URLs from messages before deleting
+  let imageUrls = [];
+  if (chatIds.length > 0) {
+    const mediaMessages = await prisma.message.findMany({
+      where: { chatId: { in: chatIds }, imageUrl: { not: null } },
+      select: { imageUrl: true },
+    });
+    imageUrls = mediaMessages.map(m => m.imageUrl);
+  }
+
+  await prisma.$transaction([
+    prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { requesterId: currentUserId, receiverId: targetUserId },
+          { requesterId: targetUserId, receiverId: currentUserId },
+        ],
+      },
+    }),
+    ...(chatIds.length > 0
+      ? [prisma.chat.deleteMany({ where: { id: { in: chatIds } } })]
+      : []),
+    prisma.block.create({
+      data: { blockerId: currentUserId, blockedId: targetUserId },
+    }),
+  ]);
+
+  // Orphan-only S3 cleanup — same URL might be referenced by a Story or
+  // SavedStory clone. Best-effort, non-blocking.
+  if (imageUrls.length) {
+    deleteS3IfOrphanBulk([...new Set(imageUrls)])
+      .catch(err => console.error('block S3 cleanup error', err));
+  }
+
+  // Notify both users to remove chat from UI
+  try {
+    const io = require('../utils/socket').getIO();
+    for (const cid of chatIds) {
+      io.to(`user:${currentUserId}`).emit('chatDeleted', { chatId: cid });
+      io.to(`user:${targetUserId}`).emit('chatDeleted', { chatId: cid });
+    }
+  } catch (_) { /* socket not ready */ }
+
+  return res.json({ message: "User blocked successfully.", deletedChatIds: chatIds });
+};
+
+// Incoming friend requests (weekly points from ledger)
+exports.getFriendRequests = async (req, res) => {
+  const currentUserId = req.authData.id;
+
+  try {
+    const pendingRequests = await prisma.friendship.findMany({
+      where: {
+        receiverId: currentUserId,
+        status: "PENDING",
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            totalPoints: true,
+            minime: {
+              select: { avatarUrl: true },
+              where: { isSaved: true },
+              orderBy: { updatedAt: "desc" },
+            },
+          },
+        },
+      },
+    });
+
+    const requesters = pendingRequests.map((r) => r.requester);
+    const requesterIds = requesters.map((u) => u.id);
+    const weekPointsMap = await getWeeklyPointsForUsers(requesterIds);
+
+    const enriched = requesters.map((user) => ({
+      id: user.id,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      avatarUrl: user.minime?.[0]?.avatarUrl || null,
+      totalPoints: user.totalPoints || 0,
+      thisWeekPoints: weekPointsMap.get(user.id) || 0,
+      profileUrl: `/api/users/${user.id}/profile`,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Incoming friend requests fetched",
+      data: enriched,
+    });
+  } catch (error) {
+    console.error("Friend request fetch error:", error);
+    return res.status(500).json({ error: "Failed to load friend requests" });
+  }
+};
+
+// Unblock user
+exports.unblockUser = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const targetUserId = parseInt(req.params.userId);
+
+  const blockRecord = await prisma.block.findUnique({
+    where: {
+      blockerId_blockedId: { blockerId: currentUserId, blockedId: targetUserId },
+    },
+  });
+  if (!blockRecord) {
+    return res
+      .status(404)
+      .json({ error: "Block record not found or user is not blocked." });
+  }
+
+  await prisma.block.delete({ where: { id: blockRecord.id } });
+  return res.json({ message: "User unblocked successfully." });
+};
+
+// Recommended friends (weekly points from ledger)
+exports.getRecommendedFriends = async (req, res) => {
+  const userId = req.authData.id;
+
+  // current friends
+  const friendships = await prisma.friendship.findMany({
+    where: {
+      status: "ACCEPTED",
+      OR: [{ requesterId: userId }, { receiverId: userId }],
+    },
+  });
+  const friendIds = friendships.map((f) =>
+    f.requesterId === userId ? f.receiverId : f.requesterId
+  );
+
+  // blocked
+  const blocks = await prisma.block.findMany({
+    where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+  });
+  const blockedIds = blocks.map((b) =>
+    b.blockerId === userId ? b.blockedId : b.blockerId
+  );
+
+  // contacts
+  const syncedContacts = await prisma.contactSync.findMany({ where: { userId } });
+  const contactUsernames = syncedContacts.map((c) => c.username).filter(Boolean);
+  const contactPhones = syncedContacts.map((c) => c.phone).filter(Boolean);
+
+  const contactUsers = await prisma.user.findMany({
+    where: {
+      OR: [
+        contactUsernames.length
+          ? { username: { in: contactUsernames } }
+          : undefined,
+        contactPhones.length ? { phone: { in: contactPhones } } : undefined,
+      ].filter(Boolean),
+      id: { notIn: [...friendIds, ...blockedIds, userId] },
+    },
+    select: {
+      id: true,
+      username: true,
+      firstName: true,
+      lastName: true,
+      totalPoints: true,
+      minime: {
+        select: { avatarUrl: true, isSaved: true, updatedAt: true },
+        orderBy: [{ isSaved: "desc" }, { updatedAt: "desc" }],
+        take: 1,
+      },
+    },
+  });
+
+  // mutual friends graph
+  const mutualFriendships = await prisma.friendship.findMany({
+    where: {
+      status: "ACCEPTED",
+      OR: [{ requesterId: { in: friendIds } }, { receiverId: { in: friendIds } }],
+    },
+    include: {
+      requester: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          minime: {
+            select: { avatarUrl: true, isSaved: true, updatedAt: true },
+            orderBy: [{ isSaved: "desc" }, { updatedAt: "desc" }],
+            take: 1,
+          },
+        },
+      },
+      receiver: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          minime: {
+            select: { avatarUrl: true, isSaved: true, updatedAt: true },
+            orderBy: [{ isSaved: "desc" }, { updatedAt: "desc" }],
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  // communities
+  const myCommunities = await prisma.communityMember.findMany({
+    where: { userId },
+    select: { communityId: true },
+  });
+  const communityIds = myCommunities.map((c) => c.communityId);
+
+  const communityMembers = communityIds.length
+    ? await prisma.communityMember.findMany({
+        where: {
+          communityId: { in: communityIds },
+          userId: { notIn: [...friendIds, ...blockedIds, userId] },
+        },
+        include: {
+          community: { select: { id: true, name: true, imageUrl: true } },
+          user: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              totalPoints: true,
+              minime: {
+                select: { avatarUrl: true, isSaved: true, updatedAt: true },
+                orderBy: [{ isSaved: "desc" }, { updatedAt: "desc" }],
+                take: 1,
+              },
+            },
+          },
+        },
+      })
+    : [];
+
+  // combine suggestions with single best reason
+  const suggested = new Map();
+
+  const upsert = (uId, base) => {
+    if (!suggested.has(uId)) {
+      suggested.set(uId, {
+        id: base.id,
+        username: base.username,
+        firstName: base.firstName ?? null,
+        lastName: base.lastName ?? null,
+        avatarUrl: base.avatarUrl || "",
+        totalPoints: base.totalPoints ?? 0,
+        thisWeekPoints: 0,
+        reason: null,
+        _reasonRank: 0,
+        mutualFriends: [],
+      });
+    }
+    const entry = suggested.get(uId);
+
+    if (entry.firstName == null && base.firstName != null) entry.firstName = base.firstName;
+    if (entry.lastName == null && base.lastName != null) entry.lastName = base.lastName;
+    if (!entry.avatarUrl && base.avatarUrl) entry.avatarUrl = base.avatarUrl;
+    if (
+      (entry.totalPoints == null || entry.totalPoints === 0) &&
+      typeof base.totalPoints === "number"
+    )
+      entry.totalPoints = base.totalPoints;
+
+    if (base.reason && REASON_RANK[base.reason.type] > (entry._reasonRank || 0)) {
+      entry.reason = base.reason;
+      entry._reasonRank = REASON_RANK[base.reason.type];
+    }
+
+    if (Array.isArray(base.mutualFriends) && base.mutualFriends.length) {
+      const seen = new Set(entry.mutualFriends.map((m) => m.id));
+      for (const m of base.mutualFriends) {
+        if (!seen.has(m.id)) {
+          entry.mutualFriends.push({
+            id: m.id,
+            username: m.username,
+            firstName: m.firstName ?? null,
+            lastName: m.lastName ?? null,
+            avatarUrl: m.avatarUrl || "",
+          });
+          seen.add(m.id);
+        }
+      }
+    }
+  };
+
+  // from contacts (highest)
+  for (const u of contactUsers) {
+    upsert(u.id, {
+      id: u.id,
+      username: u.username,
+      firstName: u.firstName ?? null,
+      lastName: u.lastName ?? null,
+      avatarUrl: firstAvatar(u.minime),
+      totalPoints: u.totalPoints || 0,
+      reason: { type: "CONTACT", label: "From contact list" },
+    });
+  }
+
+  // from mutual friends (2nd) — with via
+  for (const fr of mutualFriendships) {
+    const a = fr.requester;
+    const b = fr.receiver;
+
+    const pushCandidate = (mutual, other) => {
+      const otherId = other.id;
+      if ([...friendIds, ...blockedIds, userId].includes(otherId)) return;
+      upsert(otherId, {
+        id: otherId,
+        username: other.username,
+        firstName: other.firstName ?? null,
+        lastName: other.lastName ?? null,
+        avatarUrl: firstAvatar(other.minime),
+        reason: {
+          type: "MUTUAL",
+          label: "Mutual Friend",
+          via: {
+            id: mutual.id,
+            username: mutual.username,
+            firstName: mutual.firstName ?? null,
+            lastName: mutual.lastName ?? null,
+            avatarUrl: firstAvatar(mutual.minime),
+          },
+        },
+        mutualFriends: [
+          {
+            id: mutual.id,
+            username: mutual.username,
+            firstName: mutual.firstName ?? null,
+            lastName: mutual.lastName ?? null,
+            avatarUrl: firstAvatar(mutual.minime),
+          },
+        ],
+      });
+    };
+
+    if (friendIds.includes(a.id)) pushCandidate(a, b);
+    if (friendIds.includes(b.id)) pushCandidate(b, a);
+  }
+
+  // from community (lowest)
+  for (const cm of communityMembers) {
+    const u = cm.user;
+    upsert(u.id, {
+      id: u.id,
+      username: u.username,
+      firstName: u.firstName ?? null,
+      lastName: u.lastName ?? null,
+      avatarUrl: firstAvatar(u.minime),
+      totalPoints: u.totalPoints || 0,
+      reason: {
+        type: "COMMUNITY",
+        label: "Community",
+        community: {
+          id: cm.community.id,
+          name: cm.community.name,
+          imageUrl: cm.community.imageUrl || "",
+        },
+      },
+    });
+  }
+
+  // Fallback tiers — fill if 1-3 didn't reach 20 (ensures list never empty)
+  const remainingSlots = 20 - suggested.size;
+  if (remainingSlots > 0) {
+    const excludeIds = [
+      userId,
+      ...friendIds,
+      ...blockedIds,
+      ...Array.from(suggested.keys()),
+    ];
+
+    const popularTake = Math.ceil(remainingSlots / 2);
+    const newUserTake = remainingSlots - popularTake;
+
+    const userSelect = {
+      id: true,
+      username: true,
+      firstName: true,
+      lastName: true,
+      totalPoints: true,
+      createdAt: true,
+      minime: {
+        select: { avatarUrl: true, isSaved: true, updatedAt: true },
+        orderBy: [{ isSaved: "desc" }, { updatedAt: "desc" }],
+        take: 1,
+      },
+    };
+
+    const [popularUsers, newUsers] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { notIn: excludeIds }, isActive: true, isBanned: false },
+        orderBy: [{ totalPoints: "desc" }],
+        take: popularTake,
+        select: userSelect,
+      }),
+      prisma.user.findMany({
+        where: {
+          id: { notIn: excludeIds },
+          isActive: true,
+          isBanned: false,
+          createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        },
+        orderBy: [{ createdAt: "desc" }],
+        take: newUserTake,
+        select: userSelect,
+      }),
+    ]);
+
+    for (const u of popularUsers) {
+      upsert(u.id, {
+        id: u.id,
+        username: u.username,
+        avatarUrl: firstAvatar(u.minime),
+        totalPoints: u.totalPoints || 0,
+        reason: { type: "POPULAR", label: "Trending" },
+      });
+    }
+
+    for (const u of newUsers) {
+      if (suggested.has(u.id)) continue;
+      upsert(u.id, {
+        id: u.id,
+        username: u.username,
+        avatarUrl: firstAvatar(u.minime),
+        totalPoints: u.totalPoints || 0,
+        reason: { type: "NEW_USER", label: "New to Outspot" },
+      });
+    }
+
+    // Backfill with more POPULAR if < 30d signups didn't fill newUser slots
+    const stillShort = 20 - suggested.size;
+    if (stillShort > 0) {
+      const excludeIds2 = [
+        userId,
+        ...friendIds,
+        ...blockedIds,
+        ...Array.from(suggested.keys()),
+      ];
+      const extraPopular = await prisma.user.findMany({
+        where: { id: { notIn: excludeIds2 }, isActive: true, isBanned: false },
+        orderBy: [{ totalPoints: "desc" }],
+        take: stillShort,
+        select: userSelect,
+      });
+      for (const u of extraPopular) {
+        upsert(u.id, {
+          id: u.id,
+          username: u.username,
+          avatarUrl: firstAvatar(u.minime),
+          totalPoints: u.totalPoints || 0,
+          reason: { type: "POPULAR", label: "Trending" },
+        });
+      }
+    }
+  }
+
+  // weekly points (batch) — from ledger
+  const candidateIds = Array.from(suggested.keys());
+  if (candidateIds.length) {
+    const weekPointsMap = await getWeeklyPointsForUsers(candidateIds);
+    for (const id of candidateIds) {
+      const e = suggested.get(id);
+      e.thisWeekPoints = weekPointsMap.get(id) || 0;
+    }
+  }
+
+  const payload = Array.from(suggested.values())
+    .map((s) => ({
+      id: s.id,
+      username: s.username,
+      firstName: s.firstName ?? null,
+      lastName: s.lastName ?? null,
+      avatarUrl: s.avatarUrl || "",
+      totalPoints: s.totalPoints,
+      thisWeekPoints: s.thisWeekPoints,
+      reason:
+        s.reason && s.reason.type === "MUTUAL"
+          ? s.reason
+          : s.reason && s.reason.type === "COMMUNITY"
+          ? {
+              ...s.reason,
+              community: { ...s.reason.community, imageUrl: s.reason.community.imageUrl || "" },
+            }
+          : s.reason,
+    }))
+    .slice(0, 20);
+
+  return res.json({ recommended: payload });
+};
+
+// Sync contacts
+exports.syncContacts = async (req, res) => {
+  const userId = req.authData.id;
+  const { contacts } = req.body; // [{ username?, phone? }, ...]
+
+  if (!Array.isArray(contacts) || contacts.length === 0) {
+    return res.status(400).json({ error: "No contacts provided" });
+  }
+
+  await prisma.contactSync.deleteMany({ where: { userId } });
+
+  const toInsert = contacts.map((c) => ({
+    userId,
+    username: c.username || null,
+    phone: c.phone || null,
+  }));
+
+  await prisma.contactSync.createMany({ data: toInsert });
+
+  const matchedUsers = await prisma.user.findMany({
+    where: {
+      OR: [
+        { username: { in: contacts.map((c) => c.username).filter(Boolean) } },
+        { phone: { in: contacts.map((c) => c.phone).filter(Boolean) } },
+      ],
+      id: { not: userId },
+    },
+    select: {
+      id: true,
+      username: true,
+      phone: true,
+      minime: {
+        select: { avatarUrl: true },
+        where: { isSaved: true },
+        orderBy: { updatedAt: 'desc' }
+      },
+    },
+  });
+
+  res.json({
+    message: "Contacts synced",
+    matched: matchedUsers.map(u => ({
+      id: u.id,
+      username: u.username,
+      phone: u.phone,
+      avatarUrl: u.minime?.[0]?.avatarUrl || null
+    })),
+  });
+};
+
+// Blocked users list
+exports.getBlockedUsers = async (req, res) => {
+  const currentUserId = req.authData.id;
+
+  try {
+    const blockedUsers = await prisma.block.findMany({
+      where: { blockerId: currentUserId },
+      include: {
+        blocked: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            totalPoints: true,
+            minime: {
+              select: { avatarUrl: true },
+              where: { isSaved: true },
+              orderBy: { updatedAt: "desc" },
+            },
+          },
+        },
+      },
+    });
+
+    const users = blockedUsers.map((block) => ({
+      id: block.blocked.id,
+      username: block.blocked.username,
+      firstName: block.blocked.firstName,
+      lastName: block.blocked.lastName,
+      avatarUrl:
+        block.blocked.minime.length > 0
+          ? block.blocked.minime[0].avatarUrl
+          : null,
+      totalPoints: block.blocked.totalPoints || 0,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Blocked users fetched successfully",
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error fetching blocked users:", error);
+    return res.status(500).json({ error: "Failed to fetch blocked users" });
+  }
+};
+
+// Sent friend requests
+exports.getSentFriendRequests = async (req, res) => {
+  const currentUserId = req.authData.id;
+
+  try {
+    const sentRequests = await prisma.friendship.findMany({
+      where: { requesterId: currentUserId, status: "PENDING" },
+      include: {
+        receiver: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            totalPoints: true,
+            minime: {
+              select: { avatarUrl: true },
+              where: { isSaved: true },
+              orderBy: { updatedAt: 'desc' },
+            },
+          },
+        },
+      },
+    });
+
+    const users = sentRequests.map((request) => ({
+      id: request.receiver.id,
+      username: request.receiver.username,
+      firstName: request.receiver.firstName,
+      lastName: request.receiver.lastName,
+      avatarUrl: request.receiver.minime?.[0]?.avatarUrl || null, // fixed (array)
+      totalPoints: request.receiver.totalPoints || 0,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Sent friend requests fetched successfully",
+      data: users,
+    });
+  } catch (error) {
+    console.error("Error fetching sent friend requests:", error);
+    return res.status(500).json({ error: "Failed to fetch sent friend requests" });
+  }
+};
+
+
+exports.getFriendProfile = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const friendId = parseInt(req.params.friendId, 10);
+
+  try {
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        status: "ACCEPTED",
+        OR: [
+          { requesterId: currentUserId, receiverId: friendId },
+          { requesterId: friendId, receiverId: currentUserId },
+        ],
+      },
+    });
+    if (!friendship) {
+      return res.status(403).json({ error: "Not friends with this user" });
+    }
+
+    const friend = await prisma.user.findUnique({
+      where: { id: friendId },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        bio: true,
+        totalPoints: true,
+        minime: {
+          select: { avatarUrl: true },
+          where: { isSaved: true },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+    });
+    if (!friend) return res.status(404).json({ error: "User not found" });
+
+    const friendStories = await prisma.story.findMany({
+      where: {
+        userId: friendId,
+        visibility: "profile",
+        NOT: { status: "VAULT" },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            minime: {
+              select: { avatarUrl: true },
+              where: { isSaved: true },
+              orderBy: { updatedAt: "desc" },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const friendCount = await prisma.friendship.count({
+      where: {
+        status: "ACCEPTED",
+        OR: [{ requesterId: friendId }, { receiverId: friendId }],
+      },
+    });
+
+    const communitiesRaw = await prisma.communityMember.findMany({
+      where: { userId: friendId },
+      include: { community: true },
+      orderBy: [{ joinedAt: "desc" }],
+    });
+    const communities = communitiesRaw.map((c) => c.community);
+    const recentCommunityImageUrl = communities.length
+      ? communities[0].imageUrl || ""
+      : "";
+
+    // Spots visited count + recent visited spots — deduped via the central
+    // util so mixed placeId/coord rows and GPS drift don't over-count, and the
+    // representative for each place uses a non-empty mediaUrl if any older
+    // visit has one. See utils/visitedSpots.js.
+    const allVisitedPoints = await prisma.locationPoint.findMany({
+      where: { userId: friendId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        placeId: true,
+        placeName: true,
+        placeType: true,
+        latitude: true,
+        longitude: true,
+        mediaUrl: true,
+        points: true,
+        createdAt: true,
+      },
+    });
+    const { dedupeVisitedSpots } = require('../utils/visitedSpots');
+    const dedupedVisitedSpots = dedupeVisitedSpots(allVisitedPoints);
+    const spotsVisited = dedupedVisitedSpots.length;
+    const recentVisitedSpots = dedupedVisitedSpots.slice(0, 10);
+
+    // this friend's weekly points from ledger
+    const thisWeekPoints = await getWeeklyPointsForUser(friendId);
+
+    // friend-of-friend list
+    const friendLinks = await prisma.friendship.findMany({
+      where: {
+        status: "ACCEPTED",
+        OR: [{ requesterId: friendId }, { receiverId: friendId }],
+      },
+      include: {
+        requester: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            totalPoints: true,
+            minime: {
+              select: { avatarUrl: true },
+              where: { isSaved: true },
+              orderBy: { updatedAt: "desc" },
+              take: 1,
+            },
+          },
+        },
+        receiver: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            totalPoints: true,
+            minime: {
+              select: { avatarUrl: true },
+              where: { isSaved: true },
+              orderBy: { updatedAt: "desc" },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    const rawOthers = [];
+    for (const row of friendLinks) {
+      const other = row.requester.id === friendId ? row.receiver : row.requester;
+      if (other.id !== friendId){
+        rawOthers.push(other);
+      }
+    }
+    const seen = new Set();
+    const allFriendUsers = [];
+    for (const u of rawOthers) {
+      if (!seen.has(u.id)) {
+        allFriendUsers.push(u);
+        seen.add(u.id);
+      }
+    }
+
+    const fofIds = allFriendUsers.map((u) => u.id);
+    const fofWeeklyMap = await getWeeklyPointsForUsers(fofIds);
+    // Badge each friend-of-friend with the VIEWER's own relationship status.
+    const fofStatusMap = await getViewerFriendshipStatusMap(currentUserId, fofIds);
+
+    let friendFriends = allFriendUsers.map((u) => ({
+      id: u.id,
+      username: u.username,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      avatarUrl: u.minime?.[0]?.avatarUrl || "",
+      totalPoints: u.totalPoints || 0,
+      thisWeekPoints: fofWeeklyMap.get(u.id) || 0,
+      friendshipStatus: fofStatusMap.get(u.id) || "NONE",
+    }));
+
+    const sortBy = (req.query.sortBy || "").toString();
+    if (sortBy === "thisWeekPoints") {
+      friendFriends.sort((a, b) => b.thisWeekPoints - a.thisWeekPoints);
+    } else if (sortBy === "totalPoints") {
+      friendFriends.sort((a, b) => b.totalPoints - a.totalPoints);
+    } else if (sortBy === "username") {
+      friendFriends.sort((a, b) =>
+        (a.username || "").localeCompare(b.username || "")
+      );
+    }
+    const limit = parseInt(req.query.limit, 10);
+    if (Number.isFinite(limit) && limit > 0) {
+      friendFriends = friendFriends.slice(0, limit);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Friend profile fetched",
+      data: {
+        id: friend.id,
+        username: friend.username,
+        firstName: friend.firstName,
+        lastName: friend.lastName,
+        bio: friend.bio,
+        totalPoints: friend.totalPoints || 0,
+        minime: friend.minime,
+        friendCount,
+        spotsVisited,
+        communities,
+        recentCommunityImageUrl,
+        thisWeekPoints,
+        stories: friendStories,
+        recentVisitedSpots,
+        friendFriends,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching friend profile:", error);
+    return res.status(500).json({ error: "Failed to fetch friend profile" });
+  }
+};
+
+// Public user profile (weekly points shown only for self/friend; calculated from ledger)
+exports.getUserProfile = async (req, res) => {
+  const currentUserId = req.authData.id;
+  const targetUserId = parseInt(req.params.userId);
+
+  try {
+    const isSelf = currentUserId === targetUserId;
+
+    // Check friendship status between current user and target user (any status)
+    const friendship = await prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { requesterId: currentUserId, receiverId: targetUserId },
+          { requesterId: targetUserId, receiverId: currentUserId },
+        ],
+      },
+      select: { id: true, status: true, requesterId: true },
+    });
+    const isFriend = friendship?.status === "ACCEPTED";
+
+    // Determine friendship status for the UI
+    let friendshipStatus = "NONE"; // no relationship
+    if (friendship) {
+      if (friendship.status === "ACCEPTED") {
+        friendshipStatus = "ACCEPTED";
+      } else if (friendship.status === "PENDING") {
+        friendshipStatus = friendship.requesterId === currentUserId
+          ? "PENDING_SENT"      // I sent the request
+          : "PENDING_RECEIVED"; // They sent me a request
+      }
+    }
+
+    // Fetch user basic profile
+    const user = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        bio: true,
+        totalPoints: true,
+        isProfilePrivate: true,
+        minime: {
+          select: { avatarUrl: true },
+          where: { isSaved: true },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Privacy gate: a private account hides its rich data from non-friends.
+    // Self and accepted friends always bypass (isPrivate = false for them).
+    const isPrivate = !isSelf && !isFriend && !!user.isProfilePrivate;
+
+    // Weekly points are identity-level (always shown, like total points).
+    const thisWeekPoints = await getWeeklyPointsForUser(targetUserId);
+
+    // Rich sections — only fetched when the viewer is allowed to see them.
+    let stories = [];
+    let friends = [];
+    let friendCount = 0;
+    let spotsVisited = 0;
+    let communities = [];
+    let recentVisitedSpots = [];
+    let mostRecent = null;
+
+    if (!isPrivate) {
+      // Fetch profile-visible stories
+      stories = await prisma.story.findMany({
+        where: {
+          userId: targetUserId,
+          visibility: "profile",
+          NOT: { status: "VAULT" },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              minime: {
+                select: { avatarUrl: true },
+                where: { isSaved: true },
+                orderBy: { updatedAt: "desc" },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      // Fetch accepted friendships of target user
+      const friendships = await prisma.friendship.findMany({
+        where: {
+          status: "ACCEPTED",
+          OR: [{ requesterId: targetUserId }, { receiverId: targetUserId }],
+        },
+        include: {
+          requester: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              totalPoints: true,
+              minime: {
+                select: { avatarUrl: true },
+                where: { isSaved: true },
+                orderBy: { updatedAt: "desc" },
+              },
+            },
+          },
+          receiver: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+              totalPoints: true,
+              minime: {
+                select: { avatarUrl: true },
+                where: { isSaved: true },
+                orderBy: { updatedAt: "desc" },
+              },
+            },
+          },
+        },
+      });
+
+      // Extract friend list
+      const friendsRaw = friendships.map((fr) =>
+        fr.requesterId === targetUserId ? fr.receiver : fr.requester
+      );
+      const friendIds = friendsRaw.map((f) => f.id);
+      friendCount = friendIds.length;
+
+      // Fetch weekly points efficiently (like getFriendList)
+      const weekPointsMap = await getWeeklyPointsForUsers(friendIds);
+      // These are the TARGET's friends — badge each with the VIEWER's own
+      // relationship so the UI knows if a friend-of-friend is mine or not.
+      const viewerStatusMap = await getViewerFriendshipStatusMap(currentUserId, friendIds);
+      friends = friendsRaw.map((friend) => ({
+        id: friend.id,
+        username: friend.username,
+        firstName: friend.firstName,
+        lastName: friend.lastName,
+        avatarUrl: friend.minime?.[0]?.avatarUrl || null,
+        totalPoints: friend.totalPoints || 0,
+        thisWeekPoints: weekPointsMap.get(friend.id) || 0,
+        friendshipStatus: viewerStatusMap.get(friend.id) || "NONE",
+        profileUrl: `/api/users/${friend.id}/profile`,
+      }));
+
+      // Fetch communities
+      const communityRows = await prisma.communityMember.findMany({
+        where: { userId: targetUserId },
+        include: { community: true },
+      });
+      communities = communityRows.map((c) => c.community);
+
+      // Spots visited count + recent visited spots — deduped via the central
+      // util (utils/visitedSpots.js) so mixed placeId/coord rows and GPS drift
+      // don't over-count, and the representative for each place uses a
+      // non-empty mediaUrl if any older visit has one.
+      const allUpVisitedPoints = await prisma.locationPoint.findMany({
+        where: { userId: targetUserId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          placeId: true,
+          placeName: true,
+          placeType: true,
+          latitude: true,
+          longitude: true,
+          mediaUrl: true,
+          points: true,
+          createdAt: true,
+        },
+      });
+      const { dedupeVisitedSpots: upDedupe } = require('../utils/visitedSpots');
+      const upDeduped = upDedupe(allUpVisitedPoints);
+      spotsVisited = upDeduped.length;
+      recentVisitedSpots = upDeduped.slice(0, 10);
+
+      // Fetch most recent joined or created community
+      const mostRecentCommunity = await prisma.communityMember.findFirst({
+        where: { userId: targetUserId },
+        include: { community: true },
+        orderBy: { joinedAt: "desc" },
+      });
+
+      mostRecent = mostRecentCommunity
+        ? {
+            id: mostRecentCommunity.community.id,
+            name: mostRecentCommunity.community.name,
+            imageUrl: mostRecentCommunity.community.imageUrl || null,
+            membersCount: await prisma.communityMember.count({
+              where: { communityId: mostRecentCommunity.community.id },
+            }),
+            type:
+              mostRecentCommunity.community.creatorId === targetUserId
+                ? "created"
+                : "joined",
+            at: mostRecentCommunity.joinedAt,
+          }
+        : null;
+    }
+
+    // Final structured profile data.
+    // Always-visible identity fields: username, name, avatar, total/weekly points.
+    // isPrivate=true => rich sections are empty and the app shows the lock screen.
+    const profileData = {
+      id: user.id,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      minime: user.minime,
+      isSelf,
+      isFriend,
+      isPrivate, // true only when target is private AND viewer is neither self nor friend
+      isProfilePrivate: !!user.isProfilePrivate, // RAW lock state (true even for self) — for the settings toggle
+      friendshipStatus, // "NONE" | "ACCEPTED" | "PENDING_SENT" | "PENDING_RECEIVED"
+      friendCount,
+      spotsVisited,
+      friends,
+      communities,
+      thisWeekPoints,
+      totalPoints: user.totalPoints || 0,
+      bio: isPrivate ? null : user.bio,
+      stories,
+      recentVisitedSpots,
+      mostRecent,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: "User profile fetched",
+      data: profileData,
+    });
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    return res.status(500).json({ error: "Failed to fetch profile" });
+  }
+};
+

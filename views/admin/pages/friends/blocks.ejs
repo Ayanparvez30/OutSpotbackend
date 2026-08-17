@@ -1,0 +1,68 @@
+<%
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function userCellHtml(u){
+    if (!u) return '-';
+    const av = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+    const nm = u.username;
+    const initials = (nm || '?').trim().slice(0, 2).toUpperCase();
+    const img = av
+      ? `<img src="${esc(av)}" class="user-avatar" alt="">`
+      : `<span class="user-avatar-fallback">${esc(initials)}</span>`;
+    return `<a href="/admin/users/${u.id}" class="user-cell">${img}<span class="user-name">@${esc(nm)}</span></a>`;
+  }
+%>
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Blocked Users</h1>
+    <p class="page-subtitle">Block / unblock management</p>
+  </div>
+  <a href="/admin/friends" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Friendships</a>
+</div>
+
+<!-- Create block form -->
+<div class="card mb-3">
+  <div class="card-header"><strong>Create Block</strong></div>
+  <div class="card-body">
+    <form method="POST" action="/admin/friends/blocks/create" class="d-flex gap-2 align-items-end">
+      <div>
+        <label class="form-label">Blocker User ID</label>
+        <input type="number" name="blockerId" class="form-control form-control-sm" required style="width:120px">
+      </div>
+      <div>
+        <label class="form-label">Blocked User ID</label>
+        <input type="number" name="blockedId" class="form-control form-control-sm" required style="width:120px">
+      </div>
+      <button class="btn btn-sm btn-danger">Block</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>User</th><th>Blocked</th><th>When</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <% blocks.forEach(b => { %>
+          <tr>
+            <td><%- userCellHtml(b.blocker) %></td>
+            <td><%- userCellHtml(b.blocked) %></td>
+            <td><%= b.blockedAt.toLocaleDateString() %></td>
+            <td class="text-end">
+              <form method="POST" action="/admin/friends/blocks/<%= b.id %>/unblock" style="display:inline">
+                <button class="btn-unblock" data-confirm="Unblock this user?">Unblock</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (blocks.length === 0) { %>
+          <tr><td colspan="4" class="text-center text-muted py-3">No blocks found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

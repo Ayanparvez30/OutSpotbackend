@@ -1,0 +1,49 @@
+<div class="mb-4">
+  <h1 class="page-title">Points Ledger</h1>
+  <p class="page-subtitle">All point transactions</p>
+</div>
+
+<div class="mb-3">
+  <span class="text-muted"><%= total %> entries</span>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>User</th><th>Base</th><th>Multiplier</th><th>Final</th><th>Reason</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        <% entries.forEach(e => {
+             const u = e.user;
+             const avatar = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
+             const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username;
+             const initials = (fullName || '?').trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+        %>
+          <tr>
+            <td>
+              <a href="/admin/users/<%= u.id %>" class="user-cell">
+                <% if (avatar) { %>
+                  <img src="<%= avatar %>" class="user-avatar" alt="">
+                <% } else { %>
+                  <span class="user-avatar-fallback"><%= initials %></span>
+                <% } %>
+                <span class="user-name"><%= u.username %></span>
+              </a>
+            </td>
+            <td><%= e.basePoints %></td>
+            <td><%= e.appliedMultiplier %>x</td>
+            <td><strong class="<%= e.finalPoints >= 0 ? 'text-success' : 'text-danger' %>"><%= e.finalPoints %></strong></td>
+            <td><%= e.reason || '-' %></td>
+            <td><%= e.createdAt.toLocaleString() %></td>
+          </tr>
+        <% }) %>
+        <% if (entries.length === 0) { %>
+          <tr><td colspan="6" class="text-center text-muted py-3">No entries found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>

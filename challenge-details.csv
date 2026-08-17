@@ -1,0 +1,315 @@
+id,frequency,type,name,description,imagefile
+1,DAILY,food,Morning Meals,Take a picture of your breakfast.,morning-meals
+2,DAILY,outdoors,Green Spot,Snap a plant or tree near you.,green-spot
+3,DAILY,health,Hydration Check,Show your water bottle at a cool spot,hydration-check
+4,DAILY,mental_health,Study Time,Show your study/work desk setup (before & after).,study-time
+5,DAILY,fitness,Steps Count,Capture your walking route (start & end).,steps-count
+6,DAILY,mental_health,Book Break,Snap a reading spot,book-break
+7,DAILY,mental_health,Clean Space,Before/after photo of tidied area.,clean-space
+8,DAILY,health,Healthy Snack,Photo of a fruit/healthy snack.,healthy-snack
+9,DAILY,outdoors,Sky Watch,Snap today’s sky from where you are.,sky-watch
+10,DAILY,health,Water Source,Show a safe water point near you (two angles/points).,water-source
+11,DAILY,health,Handwash Time,Show proper handwash setup.,handwash-time
+12,DAILY,fitness,Move 10,"Share short activity moments (e.g., warm-up / mid / end).",move-10
+13,DAILY,health,Refill & Reuse,Reusable bottle/mug in action (refill + usage).,refill-and-reuse
+14,DAILY,social,Community Smile,A candid smiling moment.,community-smile
+15,DAILY,mental_health,Grateful One,Five things you’re thankful for—capture each.,grateful-one
+31,DAILY,food,Lunch Spot,Show your lunch spot today,lunch-spot
+32,DAILY,food,Favorite Pizza,Snap your favorite pizza slice,favorite-pizza
+33,DAILY,food,Best Taco Near You,Find the best taco near you,best-taco-near-you
+34,DAILY,food,10/10 Dessert,Show a dessert you would rate 10/10,10-10-dessert
+35,DAILY,food,Smoothie or Juice,Snap your favorite smoothie or juice,smoothie-or-juice
+36,DAILY,food,Go-To Boba,Show your go-to boba drink,go-to-boba
+37,DAILY,food,Hidden Bakery,Find a hidden bakery,hidden-bakery
+38,DAILY,food,Favorite Burger,Snap your favorite burger,favorite-burger
+39,DAILY,food,Best-Looking Pasta,Show your best-looking pasta dish,best-looking-pasta
+40,DAILY,food,Food Truck Find,Visit a food truck and snap your order,food-truck-find
+41,DAILY,food,Favorite Ice Cream,Show your favorite ice cream flavor,favorite-ice-cream
+42,DAILY,food,Colorful Meal,Snap a colorful meal,colorful-meal
+43,DAILY,food,Late-Night Snack,Show your late-night snack,late-night-snack
+44,DAILY,food,Outdoor Seating Restaurant,Find a restaurant with outdoor seating,outdoor-seating-restaurant
+45,DAILY,food,Favorite Brunch Plate,Snap your favorite brunch plate,favorite-brunch-plate
+46,DAILY,food,Favorite Fries,Show your favorite fries,favorite-fries
+47,DAILY,food,Best Sandwich Near You,Find the best sandwich near you,best-sandwich-near-you
+48,DAILY,food,Drink With A View,Snap a drink with a view,drink-with-a-view
+49,DAILY,food,Hidden Local Restaurant,Show a local restaurant you think more people should know about,hidden-local-restaurant
+50,DAILY,food,Something Spicy,Snap something spicy,something-spicy
+51,DAILY,coffee,Favorite Coffee Shop,Show your favorite coffee shop,favorite-coffee-shop
+52,DAILY,coffee,Morning Coffee,Snap your morning coffee,morning-coffee
+53,DAILY,coffee,Cool Cafe Interior,Find a cafe with cool interior design,cool-cafe-interior
+54,DAILY,coffee,Favorite Study Spot,Show your favorite study spot,favorite-study-spot
+55,DAILY,coffee,Latte Art,Snap a latte art design,latte-art
+56,DAILY,coffee,Coziest Cafe,Find the coziest cafe nearby,coziest-cafe
+57,DAILY,coffee,Cafe With Outdoor Seating,Show a cafe with outdoor seating,cafe-with-outdoor-seating
+58,DAILY,coffee,Tea or Matcha,Snap your favorite tea or matcha,tea-or-matcha
+59,DAILY,coffee,Untried Cafe,Find a cafe you have never tried before,untried-cafe
+60,DAILY,coffee,Favorite Cafe Pastry,Show your favorite pastry at a cafe,favorite-cafe-pastry
+61,DAILY,outdoors,Best View From Here,Snap the best view from where you are,best-view-from-here
+62,DAILY,outdoors,Favorite Park,Show your favorite park,favorite-park
+63,DAILY,outdoors,Peaceful Bench,Find a peaceful bench,peaceful-bench
+64,DAILY,outdoors,"Tree, Flower, or Plant","Snap a cool tree, flower, or plant",tree-flower-or-plant
+65,DAILY,outdoors,Waterfront View,Show a waterfront view,waterfront-view
+66,DAILY,outdoors,Best Skyline View,Find the best skyline view,best-skyline-view
+67,DAILY,outdoors,Moon Tonight,Snap the moon tonight,moon-tonight
+68,DAILY,outdoors,Cloud Formation,Show a cloud formation that looks interesting,cloud-formation
+69,DAILY,outdoors,Favorite Walking Route,Snap your favorite walking route,favorite-walking-route
+70,DAILY,outdoors,Quiet Outdoor Place,Find a quiet place outdoors,quiet-outdoor-place
+71,DAILY,outdoors,View From A Bridge,Show the best view from a bridge,view-from-a-bridge
+72,DAILY,outdoors,Something Green,Snap something green,something-green
+73,DAILY,outdoors,Favorite Trail or Path,Show your favorite trail or path,favorite-trail-or-path
+74,DAILY,outdoors,Good Sunlight Spot,Find a place with good sunlight,good-sunlight-spot
+75,DAILY,outdoors,Reflection Shot,"Snap a reflection in water, glass, or a mirror",reflection-shot
+76,DAILY,city,Cool Building,Snap a cool building,cool-building
+77,DAILY,city,Favorite Street Corner,Show your favorite street corner,favorite-street-corner
+78,DAILY,city,Colorful Wall,Find a colorful wall,colorful-wall
+79,DAILY,city,Unique Storefront,Snap a unique storefront,unique-storefront
+80,DAILY,city,Interesting Street Sign,Show a street sign with an interesting name,interesting-street-sign
+81,DAILY,city,Walk-Past Place,Find a place you have walked past but never entered,walk-past-place
+82,DAILY,city,Cool Doorway,Snap a cool doorway or entrance,cool-doorway
+83,DAILY,city,Local Landmark,Show a local landmark,local-landmark
+84,DAILY,city,Hidden Alley,Find a hidden alley or side street,hidden-alley
+85,DAILY,city,Favorite Neighborhood Spot,Snap your favorite neighborhood spot,favorite-neighborhood-spot
+86,DAILY,city,Busy City Moment,Show a busy city moment,busy-city-moment
+87,DAILY,city,Neon Lights,Find a place with neon lights,neon-lights
+88,DAILY,city,Public Clock or Fountain,"Snap a public clock, fountain, or statue",public-clock-or-fountain
+89,DAILY,city,Cool Staircase,Show a cool staircase,cool-staircase
+90,DAILY,city,Underrated Place,Find a place that feels underrated,underrated-place
+91,DAILY,art,Mural Mission,Show a mural,mural-mission
+92,DAILY,art,Public Art,Snap public art,public-art
+93,DAILY,art,Local Event Poster,Find a poster or flyer for a local event,local-event-poster
+94,DAILY,art,Creative Shop Window,Show a creative shop window,creative-shop-window
+95,DAILY,art,Sculpture,Snap a sculpture,sculpture
+96,DAILY,art,Unnoticed Street Art,Find street art you have never noticed before,unnoticed-street-art
+97,DAILY,art,Colorful City Design,Show a colorful design in the city,colorful-city-design
+98,DAILY,art,"Museum, Gallery, or Cultural Spot","Snap a museum, gallery, or cultural spot",museum-gallery-or-cultural-spot
+99,DAILY,art,Local Performance,Show a local performance or musician from a respectful distance,local-performance
+100,DAILY,art,Something Handmade,Find something handmade,something-handmade
+101,DAILY,fitness,Someone Playing A Sport,Show someone playing a sport,someone-playing-a-sport
+102,DAILY,fitness,Fitness Spot,"Snap a gym, field, court, or fitness spot",fitness-spot
+103,DAILY,fitness,Walking Goal Progress,Show your walking goal progress,walking-goal-progress
+104,DAILY,fitness,People Exercising,Find a place where people are exercising,people-exercising
+105,DAILY,fitness,Bike Rack or Biking Path,Snap a bike rack or biking path,bike-rack-or-biking-path
+106,DAILY,fitness,Basketball Court,Show a basketball court,basketball-court
+107,DAILY,fitness,Running Trail,Find a running trail,running-trail
+108,DAILY,fitness,Fitness Class Sign,"Snap a yoga, dance, or fitness class sign",fitness-class-sign
+109,DAILY,fitness,Outdoor Workout Spot,Show a place where you would work out outdoors,outdoor-workout-spot
+110,DAILY,fitness,Sports Field or Stadium,Find a sports field or stadium,sports-field-or-stadium
+111,DAILY,social,Group Hangout Spot,Snap a group hangout spot,group-hangout-spot
+112,DAILY,social,Friends Chill Spot,Show where you and your friends would chill,friends-chill-spot
+113,DAILY,social,Matching Drinks or Meals,Take a photo of matching drinks or meals,matching-drinks-or-meals
+114,DAILY,social,Board Game or Arcade Spot,"Show a board game, arcade, or activity spot",board-game-or-arcade-spot
+115,DAILY,social,First Date Spot,Snap a place perfect for a first date,first-date-spot
+116,DAILY,social,Visitor-Worthy Spot,Show a place you would bring someone visiting your city,visitor-worthy-spot
+117,DAILY,social,Fun Weekend Hangout,Find a fun weekend hangout place,fun-weekend-hangout
+118,DAILY,social,Good Time Place,Snap a place where people are having a good time,good-time-place
+119,DAILY,social,Favorite Meetup Place,Show your favorite place to meet friends,favorite-meetup-place
+120,DAILY,social,Good Music or Vibes,Find a spot with good music or vibes,good-music-or-vibes
+121,DAILY,shopping,Favorite Local Store,Show your favorite local store,favorite-local-store
+122,DAILY,shopping,Cool Thrift Find,Snap a cool thrift find,cool-thrift-find
+123,DAILY,shopping,Small Business To Support,Find a small business you want to support,small-business-to-support
+124,DAILY,shopping,Bookstore,Show a bookstore,bookstore
+125,DAILY,shopping,Flower Shop,Snap a flower shop,flower-shop
+126,DAILY,shopping,Unique Gift Shop,Find a unique gift shop,unique-gift-shop
+127,DAILY,shopping,Local Market,Show a local market,local-market
+128,DAILY,shopping,Cool Clothing Display,Snap a cool clothing display,cool-clothing-display
+129,DAILY,shopping,Best Window Design,Find a shop with the best window design,best-window-design
+130,DAILY,shopping,Handmade Goods Shop,Show a place that sells something handmade,handmade-goods-shop
+170,DAILY,weekend,Saturday Brunch,Show your Saturday brunch,saturday-brunch
+171,DAILY,weekend,Weekend Market,Visit a weekend market,weekend-market
+172,DAILY,weekend,Best Weekend View,Show your best weekend view,best-weekend-view
+173,DAILY,weekend,Live Music or Public Event,Find live music or a public event,live-music-or-public-event
+174,DAILY,weekend,Sunday Coffee,Snap your Sunday coffee,sunday-coffee
+175,DAILY,weekend,Relaxing Weekend Spot,Show a place that feels relaxing,relaxing-weekend-spot
+176,DAILY,weekend,New Weekend Restaurant,Try one new restaurant this weekend,new-weekend-restaurant
+177,DAILY,weekend,Fun Weekend Activity,Snap a fun activity with friends,fun-weekend-activity
+178,DAILY,weekend,Weekend Dessert,Show your weekend dessert,weekend-dessert
+179,DAILY,weekend,Weekend Park Visit,Visit a local park,weekend-park-visit
+180,DAILY,weekend,Weekend Energy,Find a place with weekend energy,weekend-energy
+181,DAILY,weekend,Late-Night Food Spot,Show your favorite late-night food spot,late-night-food-spot
+182,DAILY,weekend,Weekend Date Recommendation,Snap a place you would recommend for a date,weekend-date-recommendation
+183,DAILY,weekend,Weekend Recap,Create a 3-photo weekend recap,weekend-recap
+184,DAILY,seasonal,Favorite Ice Cream Spot,Snap your favorite ice cream spot,favorite-ice-cream-spot
+185,DAILY,seasonal,"Beach, Pool, or Waterfront View","Show a beach, pool, or waterfront view",beach-pool-or-waterfront-view
+186,DAILY,seasonal,Outdoor Dining,Find outdoor dining,outdoor-dining
+187,DAILY,seasonal,Best Summer Sunset,Snap the best summer sunset,best-summer-sunset
+188,DAILY,seasonal,Summer Drink,Show a summer drink,summer-drink
+189,DAILY,seasonal,Summer Farmers Market,Visit a farmers market,summer-farmers-market
+190,DAILY,seasonal,Picnic Setup,Snap a picnic setup,picnic-setup
+191,DAILY,seasonal,Outdoor Sports,Show people playing outdoor sports,outdoor-sports
+192,DAILY,seasonal,Rooftop or Patio,Find a rooftop or patio spot,rooftop-or-patio
+193,DAILY,seasonal,Best Summer Day,Show your best summer day,best-summer-day
+194,DAILY,seasonal,Fall Leaves,Snap fall leaves,fall-leaves
+195,DAILY,seasonal,Cozy Fall Cafe,Show your favorite cozy cafe,cozy-fall-cafe
+196,DAILY,seasonal,Pumpkin-Themed Item,Find a pumpkin-themed item,pumpkin-themed-item
+197,DAILY,seasonal,Fall Dessert,Snap a fall dessert,fall-dessert
+198,DAILY,seasonal,Peak Fall Colors,Visit a park during peak fall colors,peak-fall-colors
+199,DAILY,seasonal,Warm Drink,Show a warm drink,warm-drink
+200,DAILY,seasonal,Halloween Decoration,Find a Halloween decoration,halloween-decoration
+201,DAILY,seasonal,Fall Bookstore or Study Spot,Snap a bookstore or study spot,fall-bookstore-or-study-spot
+202,DAILY,seasonal,Fall Outfit Spot,Show a fall outfit in a cool location,fall-outfit-spot
+203,DAILY,seasonal,Fall Seasonal Menu Item,Find a seasonal menu item,fall-seasonal-menu-item
+204,DAILY,seasonal,Holiday Lights,Snap holiday lights,holiday-lights
+205,DAILY,seasonal,Hot Chocolate,Show your favorite hot chocolate,hot-chocolate
+206,DAILY,seasonal,Cozy Indoor Spot,Find a cozy indoor spot,cozy-indoor-spot
+207,DAILY,seasonal,Winter View,Snap a winter view,winter-view
+208,DAILY,seasonal,Comfort Food Meal,"Show a soup, ramen, or comfort food meal",comfort-food-meal
+209,DAILY,seasonal,Decorated Storefront,Find a decorated storefront,decorated-storefront
+210,DAILY,seasonal,Ice Skating or Winter Activity,Snap ice skating or winter activity,ice-skating-or-winter-activity
+211,DAILY,seasonal,Favorite Indoor Hangout,Show your favorite indoor hangout,favorite-indoor-hangout
+212,DAILY,seasonal,Warm Drink Spot,Find a warm drink spot,warm-drink-spot
+213,DAILY,seasonal,Snowy Street or Winter Scene,Snap a snowy street or winter scene,snowy-street-or-winter-scene
+214,DAILY,seasonal,Flowers Blooming,Snap flowers blooming,flowers-blooming
+215,DAILY,seasonal,Favorite Outdoor Cafe,Show your favorite outdoor cafe,favorite-outdoor-cafe
+216,DAILY,seasonal,Colorful Garden,Find a colorful garden,colorful-garden
+217,DAILY,seasonal,Sunny Walk,Snap a sunny walk,sunny-walk
+218,DAILY,seasonal,Fresh Drink or Smoothie,Show a fresh drink or smoothie,fresh-drink-or-smoothie
+219,DAILY,seasonal,Spring Park Visit,Visit a park,spring-park-visit
+220,DAILY,seasonal,Spring Dessert,Find a spring dessert,spring-dessert
+221,DAILY,seasonal,Outdoor Seating People,Snap people enjoying outdoor seating,outdoor-seating-people
+222,DAILY,seasonal,Refreshed Place,Show a place that feels refreshed,refreshed-place
+223,DAILY,seasonal,Best Spring View,Find the best spring view,best-spring-view
+239,DAILY,brand,Breakfast Blitz,Show your breakfast,breakfast-blitz
+240,DAILY,brand,Sunset Snap-Off,Snap your best sunset,sunset-snap-off
+242,DAILY,brand,Coffee Crawl Daily,Show your favorite coffee shop,coffee-crawl-daily
+243,DAILY,brand,Donut Drop,Snap your favorite donut,donut-drop
+244,DAILY,brand,Active Spotting,Show a public activity scene,active-spotting
+245,DAILY,brand,Hidden Gem Hunt,Find a place most people do not know,hidden-gem-hunt
+246,DAILY,brand,View Victory,Capture the best view nearby,view-victory
+247,DAILY,brand,Local Legend,Show a small business you love,local-legend
+248,DAILY,brand,Snack Attack,Snap your favorite snack,snack-attack
+249,DAILY,brand,Park Points,Visit a local park,park-points
+250,DAILY,brand,Brunch Battle,Show your best brunch,brunch-battle
+252,DAILY,brand,OutSpot Original,Visit a place you have never been,outspot-original
+253,DAILY,brand,Flavor Finder,Try something new,flavor-finder
+254,DAILY,brand,City Scout,Snap a cool city location,city-scout
+255,DAILY,brand,Sweet Spot,Show your favorite dessert,sweet-spot
+256,DAILY,brand,Cuisine Quest Daily,Visit a new cuisine restaurant,cuisine-quest-daily
+257,DAILY,brand,Mural Mission Spot,Snap a mural,mural-mission-spot
+258,DAILY,health,Morning Walk Snap,Take a walk and snap something interesting along the way,morning-walk-snap
+259,DAILY,health,Healthy Plate,Snap a balanced meal,healthy-plate
+260,DAILY,health,Fruit Find,Show your favorite fruit or fruit bowl,fruit-find
+261,DAILY,health,Smoothie Spot,Find a smoothie or juice bar,smoothie-spot
+262,DAILY,health,Green Meal Challenge,Snap a meal with something green in it,green-meal-challenge
+263,DAILY,health,Outdoor Stretch,Show a park or place where you would stretch,outdoor-stretch
+264,DAILY,health,Steps Challenge,Walk to a new place and snap your destination,steps-challenge
+265,DAILY,health,Fresh Air Break,Step outside and capture your view,fresh-air-break
+266,DAILY,health,Healthy Snack Hunt,"Show a healthy snack from a cafe, store, or home",healthy-snack-hunt
+267,DAILY,health,Workout Spot,"Snap your gym, court, field, or outdoor workout area",workout-spot
+268,DAILY,health,Mindful Moment,Show a peaceful place where you can relax,mindful-moment
+269,DAILY,health,Sleep Reset,Snap your calm evening routine setup,sleep-reset
+270,DAILY,health,No Elevator Challenge,Take the stairs and snap the staircase,no-elevator-challenge
+271,DAILY,health,Protein Pick,Show a protein-focused meal or snack,protein-pick
+272,DAILY,health,Nature Break,"Visit a park, trail, garden, or waterfront",nature-break
+273,DAILY,health,Post-Workout Fuel,Snap your meal or drink after exercise,post-workout-fuel
+274,DAILY,health,Healthy Swap,Show a healthier version of something you usually eat,healthy-swap
+275,DAILY,health,Sunlight Snap,Go outside and capture natural sunlight,sunlight-snap
+276,DAILY,health,Digital Detox Spot,Show a place where you would put your phone away and relax,digital-detox-spot
+277,DAILY,fitness_health,10-Minute Walk,Walk for 10 minutes and snap your favorite thing you saw,10-minute-walk
+278,DAILY,fitness_health,Park Workout,Find a park with space to move,park-workout
+279,DAILY,fitness_health,Court Check,"Snap a basketball, tennis, soccer, or volleyball court",court-check
+280,DAILY,fitness_health,Bike Route,"Show a bike lane, bike rack, or biking trail",bike-route
+281,DAILY,fitness_health,Run Route,Capture a running path or trail,run-route
+282,DAILY,fitness_health,Gym Grind,Snap your gym entrance or workout setup,gym-grind
+283,DAILY,fitness_health,Active Commute,Walk or bike somewhere instead of driving,active-commute
+284,DAILY,fitness_health,Stair Climb,Find a big staircase and snap it,stair-climb
+285,DAILY,fitness_health,Outdoor Game,Show a public sports field or court,outdoor-game
+286,DAILY,fitness_health,Fitness Class Find,"Snap a yoga, boxing, pilates, dance, or spin studio",fitness-class-find
+287,DAILY,fitness_health,Stretch Zone,Find a peaceful spot to stretch,stretch-zone
+288,DAILY,fitness_health,Sweat Then Snack,Do a workout and snap a healthy snack after,sweat-then-snack
+290,DAILY,fitness_health,One-Mile Mission,Walk or run one mile and snap the finish spot,one-mile-mission
+291,DAILY,fitness_health,Move Before Meal,Take a walk before eating out,move-before-meal
+292,DAILY,mental_health,Peaceful Place,Snap a calm place nearby,peaceful-place
+293,DAILY,mental_health,Quiet Corner,"Find a quiet coffee shop, park bench, library, or bookstore",quiet-corner
+294,DAILY,mental_health,Gratitude Snap,Capture one thing that made you happy today,gratitude-snap
+295,DAILY,mental_health,Golden Hour Reset,Go outside during golden hour,golden-hour-reset
+296,DAILY,mental_health,Nature Therapy,"Show trees, flowers, water, or sky",nature-therapy
+297,DAILY,mental_health,Solo Recharge,Show a place where you can recharge,solo-recharge
+298,DAILY,mental_health,Calm Cafe,Find a cozy cafe with relaxing vibes,calm-cafe
+299,DAILY,mental_health,Screen-Free Spot,Show a place you would enjoy without scrolling,screen-free-spot
+300,DAILY,mental_health,Fresh Start,Snap something that makes your day feel reset,fresh-start
+16,WEEKLY,fitness,Walk 5 Days,Log a walk on 5 different days this week.,walk-5-days
+17,WEEKLY,outdoors,Home Garden,Share 3 updates of a plant’s growth.,home-garden
+18,WEEKLY,mental_health,Reading Streak,Post 4 reading sessions this week.,reading-streak
+19,WEEKLY,health,Water Diary,Upload 7 hydration check-ins.,water-diary
+20,WEEKLY,social,Clean Drive,Post 3 cleanup moments.,clean-drive
+21,WEEKLY,fitness,Active Week,Share 4 exercise moments.,active-week
+22,WEEKLY,health,Healthy Kitchen,Share 3 healthy meals.,healthy-kitchen
+23,WEEKLY,outdoors,Explore Nature,Post 3 outdoor scenes.,explore-nature
+24,WEEKLY,mental_health,Skill Practice,Show 3 moments practicing a skill.,skill-practice
+25,WEEKLY,health,Mindful Week,Capture 3 peaceful places in your city,mindful-week
+26,WEEKLY,health,Neighborhood Water,Show 3 different safe water points.,neighborhood-water
+27,WEEKLY,social,Waste Less,Share 3 reuse/recycle acts.,waste-less
+28,WEEKLY,social,Community Care,Share 2 acts of help.,community-care
+29,WEEKLY,mental_health,Early Riser,Upload 5 early-morning shots.,early-riser
+30,WEEKLY,food,Local Food,Show 3 local/seasonal foods.,local-food
+131,WEEKLY,food,Coffee Shop Crawl,Visit 3 different coffee shops in one week,coffee-shop-crawl
+132,WEEKLY,food,Cuisine Quest,Try 3 different cuisines,cuisine-quest
+133,WEEKLY,food,3 Meal 3 Places,"Snap breakfast, lunch, and dinner from 3 different places",3-meal-3-places
+134,WEEKLY,food,Best Dessert In Your Area,Find the best dessert spot in your area,best-dessert-in-your-area
+135,WEEKLY,food,Two New Local Spots,Visit 2 local restaurants you have never tried before,two-new-local-spots
+136,WEEKLY,food,3 Drinks 3 Places,Snap 3 different drinks from 3 different places,3-drinks-3-places
+137,WEEKLY,food,Two Food Trucks,Try food from 2 food trucks,two-food-trucks
+138,WEEKLY,food,Restaurant In A New Neighborhood,Visit a restaurant in a new neighborhood,restaurant-in-a-new-neighborhood
+139,WEEKLY,food,"City Best: Burger, Pizza, or Taco","Find your city best burger, pizza, or taco",city-best-burger-pizza-or-taco
+140,WEEKLY,food,Perfect Food Day,"Create a ""perfect food day"" with 3 different stops",perfect-food-day
+141,WEEKLY,city,3 Different Neighborhoods,Visit 3 different neighborhoods,3-different-neighborhoods
+142,WEEKLY,city,5 City Landmarks,Snap 5 landmarks in your city,5-city-landmarks
+143,WEEKLY,city,3 Hidden Gems,Find 3 hidden gems,3-hidden-gems
+144,WEEKLY,city,"Park, Cafe, Restaurant","Visit a park, cafe, and restaurant in the same week",park-cafe-restaurant
+145,WEEKLY,outdoors,3 Great Views,Show 3 places with great views,3-great-views
+146,WEEKLY,art,3 Murals or Street Art,Snap 3 different murals or street art pieces,3-murals-or-street-art
+147,WEEKLY,city,2 New Places,Visit 2 places you have never been before,2-new-places
+148,WEEKLY,city,3 Photo-Worthy Spots,Find 3 photo-worthy spots,3-photo-worthy-spots
+149,WEEKLY,city,3 Architecture Types,Snap 3 different types of architecture,3-architecture-types
+150,WEEKLY,city,Mini City Tour,Create a mini city tour using 5 photos,mini-city-tour
+151,WEEKLY,social,Weekend In 5 Photos,Show your weekend in 5 photos,weekend-in-5-photos
+152,WEEKLY,social,3 Recommended Places,Visit 3 places you would recommend to a friend,3-recommended-places
+153,WEEKLY,social,"Food, Fitness, Fun","Snap 3 activities: food, fitness, and fun",food-fitness-fun
+154,WEEKLY,social,Full Day Outside,Show a full day outside your home,full-day-outside
+155,WEEKLY,social,Productive Place,Find a place that makes you feel productive,productive-place
+156,WEEKLY,social,Place You Used To Go,Visit a place you used to go often but haven't been recently,place-you-used-to-go
+157,WEEKLY,social,Favorite Hangout Area,Show your favorite hangout area,favorite-hangout-area
+158,WEEKLY,social,3 Good Vibe Places,Snap 3 places with good vibes,3-good-vibe-places
+159,WEEKLY,social,Ideal Sunday,"Create your ""ideal Sunday"" with 3 stops",ideal-sunday
+160,WEEKLY,fitness,"10,000 Steps Tour","Walk 10,000 steps and snap 3 places along the way",10-000-steps-tour
+161,WEEKLY,outdoors,3 Parks In A Week,Visit 3 parks in one week,3-parks-in-a-week
+162,WEEKLY,fitness,3 Sports Activities,Find 3 different sports or fitness activities happening nearby,3-sports-activities
+163,WEEKLY,outdoors,Sunrise/Sunset Plus Activity,Snap a sunrise or sunset plus one outdoor activity,sunrise-sunset-plus-activity
+164,WEEKLY,fitness,"Gym, Park, Healthy Food","Visit a gym, park, and healthy food spot",gym-park-healthy-food
+165,WEEKLY,fitness,3 Ways To Stay Active,Show 3 ways people stay active in your city,3-ways-to-stay-active
+166,WEEKLY,outdoors,Scenic Walk 5 Stops,Complete a scenic walk and document 5 stops,scenic-walk-5-stops
+167,WEEKLY,fitness,"Court, Field, Running Path","Find a basketball court, soccer field, and running path",court-field-running-path
+168,WEEKLY,fitness,3 Outdoor Workout Spots,Snap 3 outdoor workout locations,3-outdoor-workout-spots
+169,WEEKLY,fitness,Best Active Day,Show your best active day,best-active-day
+224,WEEKLY,bonus,5 New Places In A Week,Visit 5 new places in one week,5-new-places-in-a-week
+225,WEEKLY,bonus,Full Food Crawl,Complete a full food crawl with 4 stops,full-food-crawl
+226,WEEKLY,bonus,10 City Landmarks,Snap 10 different city landmarks,10-city-landmarks
+227,WEEKLY,bonus,5 Cuisine Types,Show 5 different types of cuisine,5-cuisine-types
+228,WEEKLY,bonus,3 Small Businesses In A Day,Visit 3 small businesses in one day,3-small-businesses-in-a-day
+229,WEEKLY,bonus,Hidden Gems Collection,"Create a ""hidden gems"" collection with 5 spots",hidden-gems-collection
+230,WEEKLY,bonus,Sunrise And Sunset Same Day,Snap sunrise and sunset on the same day,sunrise-and-sunset-same-day
+231,WEEKLY,bonus,3 Parks In 48 Hours,Visit 3 parks in 48 hours,3-parks-in-48-hours
+232,WEEKLY,bonus,City Through 7 Photos,Show your city through 7 photos,city-through-7-photos
+233,WEEKLY,bonus,5 Places Under $10,Find 5 places under $10,5-places-under-10
+234,WEEKLY,bonus,"Restaurant, Cafe, Park, Shop","Visit a restaurant, cafe, park, and local shop in one day",restaurant-cafe-park-shop
+235,WEEKLY,bonus,5 Different Murals,Snap 5 different murals,5-different-murals
+236,WEEKLY,bonus,3 Live Energy Places,"Show 3 places with live energy: music, sports, crowds, or events",3-live-energy-places
+237,WEEKLY,bonus,Neighborhood Tour 5 Stops,Complete a neighborhood tour with 5 stops,neighborhood-tour-5-stops
+238,WEEKLY,bonus,Unknown To Friends,Find 3 places your friends have never heard of,unknown-to-friends
+241,WEEKLY,brand,Street Art Sprint,Find 3 pieces of street art,street-art-sprint
+251,WEEKLY,brand,Weekend Warrior,Complete 3 weekend spots,weekend-warrior
+289,WEEKLY,fitness_health,Weekend Walkabout,Take a long walk and capture 3 stops,weekend-walkabout
+301,WEEKLY,health,3-Day Walk Streak,Take a walk on 3 different days,3-day-walk-streak
+302,WEEKLY,health,Healthy Food Crawl,Visit 3 healthy food spots in one week,healthy-food-crawl
+303,WEEKLY,health,Park Trio,Visit 3 different parks,park-trio
+304,WEEKLY,health,Fitness Explorer,"Find a gym, court, and trail",fitness-explorer
+305,WEEKLY,health,Smoothie Week,Try 2 different smoothie or juice spots,smoothie-week
+306,WEEKLY,health,Active Weekend,Complete 2 outdoor activities over the weekend,active-weekend
+307,WEEKLY,health,Wellness Tour,"Visit a cafe, park, fitness spot, and healthy restaurant",wellness-tour
+308,WEEKLY,health,Step-Up Week,Walk to 3 places you would usually drive or Uber to,step-up-week
+309,WEEKLY,health,New Healthy Spot,Try one new healthy restaurant or cafe,new-healthy-spot
+310,WEEKLY,health,Sunrise or Sunset Walk,Walk during sunrise or sunset,sunrise-or-sunset-walk
+311,WEEKLY,health,Outdoor Hour,Spend one hour outside and snap 3 moments,outdoor-hour
+312,WEEKLY,health,Fitness Class Challenge,Try or visit a new fitness class,fitness-class-challenge
+313,WEEKLY,health,Healthy Breakfast Week,Snap 3 healthy breakfasts,healthy-breakfast-week
+314,WEEKLY,health,Hydration Hero,Show your water bottle at 3 different places,hydration-hero

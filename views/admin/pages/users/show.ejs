@@ -1,0 +1,293 @@
+<div class="row">
+  <div class="col-md-4">
+    <% const currentAvatar = (user.minime && (user.minime.find(m => m.isSaved) || user.minime[0])) || null; %>
+    <div class="card mb-3">
+      <div class="card-body text-center">
+        <% if (currentAvatar && currentAvatar.avatarUrl) { %>
+          <img src="<%= currentAvatar.avatarUrl %>" class="profile-avatar mb-3" alt="">
+        <% } else { %>
+          <span class="profile-avatar-fallback mb-3"><%= (user.username || '?').slice(0, 2).toUpperCase() %></span>
+        <% } %>
+        <h5><%= user.username %></h5>
+        <p class="text-muted mb-1"><%= user.email || 'No email' %></p>
+        <p class="text-muted mb-1"><%= user.phone || 'No phone' %></p>
+        <p class="mb-1"><strong><%= user.totalPoints %></strong> points</p>
+        <p class="text-muted mb-2"><%= [user.firstName, user.lastName].filter(Boolean).join(' ') || 'No name set' %></p>
+
+        <% if (user.isBanned) { %>
+          <span class="badge bg-danger mb-2">Banned</span>
+        <% } else if (!user.isActive) { %>
+          <span class="badge bg-secondary mb-2">Inactive</span>
+        <% } else { %>
+          <span class="badge bg-success mb-2">Active</span>
+        <% } %>
+
+        <div class="mt-2">
+          <a href="/admin/users/<%= user.id %>/edit" class="btn btn-sm btn-outline-primary">Edit Profile</a>
+          <a href="/admin/users/<%= user.id %>/inventory" class="btn btn-sm btn-outline-secondary">Inventory</a>
+          <a href="/admin/users/<%= user.id %>/points" class="btn btn-sm btn-outline-secondary">Points Ledger</a>
+          <a href="/admin/users/<%= user.id %>/location-history" class="btn btn-sm btn-outline-secondary">Location</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><strong>Info</strong></div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between"><span>ID</span><span><%= user.id %></span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>Referral Code</span><span><%= user.referralCode %></span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>Friends</span><span><%= friendCount %></span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>Communities</span><span><%= user.communities.length %></span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>Joined</span><span><%= user.createdAt.toLocaleDateString() %></span></li>
+        <% if (user.Location) { %>
+          <li class="list-group-item d-flex justify-content-between"><span>Location</span><span><%= user.Location.latitude.toFixed(4) %>, <%= user.Location.longitude.toFixed(4) %></span></li>
+        <% } %>
+        <% if (user.bio) { %>
+          <li class="list-group-item"><span class="text-muted">Bio:</span> <%= user.bio %></li>
+        <% } %>
+      </ul>
+    </div>
+
+    <!-- Actions -->
+    <div class="card mb-3">
+      <div class="card-header"><strong>Actions</strong></div>
+      <div class="card-body">
+        <% if (user.isBanned) { %>
+          <form method="POST" action="/admin/users/<%= user.id %>/unban" class="mb-2">
+            <button class="btn btn-sm btn-success w-100" data-confirm="Unban this user?">Unban User</button>
+          </form>
+        <% } else { %>
+          <form method="POST" action="/admin/users/<%= user.id %>/ban" class="mb-2">
+            <input type="text" name="reason" class="form-control form-control-sm mb-1" placeholder="Ban reason (optional)">
+            <button class="btn btn-sm btn-danger w-100" data-confirm="Ban this user?">Ban User</button>
+          </form>
+        <% } %>
+
+        <%# Deactivate temporarily disabled — ban-only for now. Re-enable by changing `if (false)` below to `if (user.isActive)`. %>
+        <% if (false) { %>
+          <form method="POST" action="/admin/users/<%= user.id %>/deactivate" class="mb-2">
+            <button class="btn btn-sm btn-warning w-100" data-confirm="Deactivate this user?">Deactivate</button>
+          </form>
+        <% } %>
+        <% if (!user.isActive) { %>
+          <form method="POST" action="/admin/users/<%= user.id %>/activate" class="mb-2">
+            <button class="btn btn-sm btn-success w-100">Activate</button>
+          </form>
+        <% } %>
+
+        <hr class="my-3">
+
+        <!-- Adjust points -->
+        <form method="POST" action="/admin/users/<%= user.id %>/adjust-points" class="action-block mb-3">
+          <div class="action-label mb-2"><i class="bi bi-coin me-1"></i>Adjust points</div>
+          <label class="form-label-sm">Amount</label>
+          <input type="number" name="points" class="form-control form-control-sm mb-2" placeholder="e.g. 100   ·   -50 to deduct" required>
+          <label class="form-label-sm">Reason <span class="text-secondary">(shown in ledger)</span></label>
+          <input type="text" name="reason" class="form-control form-control-sm mb-2" value="ADMIN_ADJUSTMENT">
+          <button class="btn btn-sm btn-gradient w-100">Adjust Points</button>
+        </form>
+
+        <!-- Grant item -->
+        <form method="POST" action="/admin/users/<%= user.id %>/grant-item" class="action-block">
+          <div class="action-label mb-2"><i class="bi bi-bag-plus me-1"></i>Grant an item</div>
+          <label class="form-label-sm">Pick an item to add to the user's inventory</label>
+
+          <input type="hidden" name="itemId" id="grantItemId" required>
+          <div class="item-picker">
+            <button type="button" class="item-picker-toggle" id="grantItemToggle">
+              <span class="item-picker-selected" id="grantItemSelected">
+                <span class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>
+                <span class="text-secondary">Choose item…</span>
+              </span>
+              <i class="bi bi-chevron-down"></i>
+            </button>
+            <div class="item-picker-menu" id="grantItemMenu">
+              <input type="text" class="form-control form-control-sm item-picker-search" id="grantItemSearch" placeholder="Search items…" autocomplete="off">
+              <div class="item-picker-list">
+                <% shopItems.forEach(item => { %>
+                  <button type="button" class="item-picker-option" data-id="<%= item.id %>" data-img="<%= item.imageUrl || '' %>" data-name="<%= item.slot %> · <%= item.name %>">
+                    <% if (item.imageUrl) { %>
+                      <img src="<%= item.imageUrl %>" class="grant-item-preview" alt="">
+                    <% } else { %>
+                      <span class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>
+                    <% } %>
+                    <span class="item-picker-name"><strong><%= item.name %></strong><span class="text-secondary d-block"><%= item.slot %></span></span>
+                  </button>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-sm btn-gradient w-100 mt-2">Grant Item</button>
+        </form>
+        <script>
+          (function () {
+            var picker = document.querySelector('.item-picker');
+            if (!picker) return;
+            var toggle = document.getElementById('grantItemToggle');
+            var menu = document.getElementById('grantItemMenu');
+            var idInput = document.getElementById('grantItemId');
+            var selected = document.getElementById('grantItemSelected');
+            var search = document.getElementById('grantItemSearch');
+
+            toggle.addEventListener('click', function () {
+              menu.classList.toggle('open');
+              if (menu.classList.contains('open')) search.focus();
+            });
+            document.addEventListener('click', function (e) {
+              if (!picker.contains(e.target)) menu.classList.remove('open');
+            });
+            search.addEventListener('input', function () {
+              var q = search.value.toLowerCase();
+              menu.querySelectorAll('.item-picker-option').forEach(function (opt) {
+                opt.style.display = opt.dataset.name.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+              });
+            });
+            menu.querySelectorAll('.item-picker-option').forEach(function (opt) {
+              opt.addEventListener('click', function () {
+                idInput.value = opt.dataset.id;
+                var img = opt.dataset.img;
+                var imgHtml = img
+                  ? '<img src="' + img + '" class="grant-item-preview" alt="">'
+                  : '<span class="grant-item-preview grant-item-preview-empty"><i class="bi bi-image"></i></span>';
+                selected.innerHTML = imgHtml + '<span class="user-name">' + opt.dataset.name + '</span>';
+                menu.classList.remove('open');
+              });
+            });
+          })();
+        </script>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <!-- Generated Avatars -->
+    <div class="card mb-3">
+      <div class="card-header"><strong>Avatars (<%= user.minime ? user.minime.length : 0 %>)</strong></div>
+      <div class="card-body">
+        <% if (!user.minime || user.minime.length === 0) { %>
+          <p class="text-secondary mb-0">No avatars generated yet.</p>
+        <% } else { %>
+          <div class="minime-grid">
+            <% user.minime.forEach(m => { %>
+              <a href="<%= m.avatarUrl %>" target="_blank" class="minime-thumb">
+                <img src="<%= m.avatarUrl %>" alt="">
+              </a>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Recent Submissions -->
+    <div class="card mb-3">
+      <div class="card-header"><strong>Recent Submissions</strong></div>
+      <div class="card-body p-0">
+        <% if (user.submissions.length === 0) { %>
+          <p class="text-muted p-3 mb-0">No submissions yet.</p>
+        <% } else { %>
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Challenge</th><th>Media</th><th>Date</th></tr></thead>
+            <tbody>
+              <% user.submissions.forEach(s => { %>
+                <tr>
+                  <td><%= s.challenge.title %></td>
+                  <td><a href="<%= s.mediaUrl %>" target="_blank"><img src="<%= s.mediaUrl %>" class="submission-img" alt="submission"></a></td>
+                  <td><%= s.createdAt.toLocaleDateString() %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Recent Points -->
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between">
+        <strong>Recent Points</strong>
+        <a href="/admin/users/<%= user.id %>/points" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <% if (user.pointsLedger.length === 0) { %>
+          <p class="text-muted p-3 mb-0">No points history.</p>
+        <% } else { %>
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Base</th><th>Multiplier</th><th>Final</th><th>Reason</th><th>Date</th></tr></thead>
+            <tbody>
+              <% user.pointsLedger.forEach(p => { %>
+                <tr>
+                  <td><%= p.basePoints %></td>
+                  <td><%= p.appliedMultiplier %>x</td>
+                  <td><strong><%= p.finalPoints %></strong></td>
+                  <td><%= p.reason || '-' %></td>
+                  <td><%= p.createdAt.toLocaleDateString() %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Inventory preview -->
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between">
+        <strong>Inventory (<%= user.inventory.length %>)</strong>
+        <a href="/admin/users/<%= user.id %>/inventory" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        <% if (user.inventory.length === 0) { %>
+          <p class="text-muted p-3 mb-0">No items.</p>
+        <% } else { %>
+          <table class="table table-sm mb-0 align-middle">
+            <thead><tr><th></th><th>Item</th><th>Slot</th><th>Equipped</th><th>Action</th></tr></thead>
+            <tbody>
+              <% user.inventory.forEach(inv => { %>
+                <tr>
+                  <td>
+                    <% if (inv.item.imageUrl) { %>
+                      <img src="<%= inv.item.imageUrl %>" class="shop-img-sm" alt="">
+                    <% } else { %>
+                      <span class="shop-img-sm grant-item-preview-empty"><i class="bi bi-image"></i></span>
+                    <% } %>
+                  </td>
+                  <td><%= inv.item.name %></td>
+                  <td><%= inv.item.slot %></td>
+                  <td><%= inv.equipped ? 'Yes' : 'No' %></td>
+                  <td>
+                    <form method="POST" action="/admin/users/<%= user.id %>/remove-item" style="display:inline">
+                      <input type="hidden" name="inventoryId" value="<%= inv.id %>">
+                      <button class="btn btn-sm btn-outline-danger" data-confirm="Remove this item?">Remove</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Reports -->
+    <% if (user.reportsReceived.length > 0) { %>
+      <div class="card mb-3">
+        <div class="card-header"><strong>Reports Received (<%= user.reportsReceived.length %>)</strong></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Reporter</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>
+              <% user.reportsReceived.forEach(r => { %>
+                <tr>
+                  <td><%= r.reporter.username %></td>
+                  <td><span class="badge badge-<%= r.status.toLowerCase() %>"><%= r.status %></span></td>
+                  <td><%= r.createdAt.toLocaleDateString() %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

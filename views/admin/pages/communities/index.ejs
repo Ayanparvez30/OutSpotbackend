@@ -1,0 +1,55 @@
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h1 class="page-title">Communities</h1>
+    <p class="page-subtitle">All communities and their creators</p>
+  </div>
+  <form method="GET" action="/admin/communities" class="d-flex gap-2">
+    <input type="text" name="q" class="form-control form-control-sm" placeholder="Search..." value="<%= search %>" style="width:200px">
+    <button class="btn btn-sm btn-primary">Search</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead>
+        <tr><th>Community</th><th>Creator</th><th>Members</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        <% communities.forEach(c => { %>
+          <tr class="js-row-link" data-href="/admin/communities/<%= c.id %>" style="cursor:pointer">
+            <td>
+              <div class="user-cell">
+                <% if (c.imageUrl) { %>
+                  <img src="<%= c.imageUrl %>" class="community-thumb" alt="">
+                <% } else { %>
+                  <span class="community-thumb-fallback"><i class="bi bi-people"></i></span>
+                <% } %>
+                <span class="user-name"><%= c.name %></span>
+              </div>
+            </td>
+            <td><a href="/admin/users/<%= c.creator.id %>">@<%= c.creator.username %></a></td>
+            <td class="fw-semibold"><%= c._count.members.toLocaleString() %></td>
+            <td class="text-end">
+              <a href="/admin/communities/<%= c.id %>/edit" class="row-action" title="Edit"><i class="bi bi-pencil"></i></a>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (communities.length === 0) { %>
+          <tr><td colspan="4" class="text-center text-muted py-3">No communities found.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<script>
+  document.querySelectorAll('.js-row-link').forEach(function (row) {
+    row.addEventListener('click', function (e) {
+      if (e.target.closest('a, button, .row-action')) return; // let links/buttons act normally
+      window.location = row.dataset.href;
+    });
+  });
+</script>
