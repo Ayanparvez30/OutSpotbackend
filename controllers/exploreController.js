@@ -1340,14 +1340,21 @@ const grouped = await prisma.locationPoint.groupBy({
 });
 
 
+    // Nobody checked in near this user since Monday — which is the normal case
+    // in a quiet area, and it left the Explore feed's "Spots Trending This Week"
+    // carousel empty while the map's Trending pill (a different, Google-backed
+    // endpoint) showed plenty. Fall back to the same Google trending list the
+    // map uses so both surfaces agree; `source` says which one answered.
     if (!grouped.length) {
+      const fallback = await trendingFallback({ userId, lat, lng, radius, limit });
       return res.json({
         success: true,
         title: 'Top Trending',
         subtitle: 'Best of the week',
         since,
         radius,
-        restaurants: [],
+        source: 'google',
+        restaurants: fallback,
       });
     }
 
@@ -2015,3 +2022,61 @@ exports.clearSearchHistory = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to clear history' });
   }
 };
+
+
+/// Google-backed trending, used when no check-ins exist for the week.
+///
+/// Deliberately reuses `getTrendingCandidates` — the very same helper the map's
+/// Trending pill goes through — so the two lists are the same places in the same
+/// order rather than two different ideas of "trending".
+async function trendingFallback({ userId, lat, lng, radius, limit }) {
+  let candidates = [];
+  try {
+    candidates = await getTrendingCandidates({ lat, lng, radius });
+  } catch (e) {
+    console.error('trendingFallback candidates failed', e);
+    return [];
+  }
+  if (!candidates.length) return [];
+
+  const picked = candidates.slice(0, limit);
+
+  // Which friends have been to these, so the cards keep their spotted-here row.
+  const friendIds = await getFriendIds(userId);
+  const friendsByPlace = new Map();
+  if (friendIds.length) {
+    const visits = await prisma.locationPoint.findMany({
+      where: {
+        userId: { in: friendIds },
+        placeId: { in: picked.map(p => p.place_id).filter(Boolean) },
+      },
+      select: { placeId: true, userId: true },
+    });
+    for (const v of visits) {
+      if (!friendsByPlace.has(v.placeId)) friendsByPlace.set(v.placeId, new Set());
+      friendsByPlace.get(v.placeId).add(v.userId);
+    }
+  }
+
+  const out = [];
+  for (const p of picked) {
+    const mapped = mapPlace(p, lat, lng);
+    const friendSet = friendsByPlace.get(mapped.placeId) || new Set();
+    out.push({
+      ...mapped,
+      id: String(mapped.placeId),
+      image: mapped.photoUrl || '',
+      photos: mapped.photoUrl ? [mapped.photoUrl] : [],
+      category: 'Trending',
+      totalReviews: mapped.userRatingsTotal || 0,
+      // These three are what the check-in path contributes; there are no visits
+      // to count here, so they stay at zero rather than being invented.
+      visitCount: 0,
+      uniqueUsers: 0,
+      pointsCollected: 0,
+      friendsCount: friendSet.size,
+      friendsPreview: await previewFriends(friendSet),
+    });
+  }
+  return out;
+}
