@@ -17,7 +17,13 @@ const {
 
   // ✅ Explore redesign feed sections
   getFriendsVisitedRecently,
-  getPointsBoostSpots
+  getPointsBoostSpots,
+
+  // ✅ Saved places
+  savePlace,
+  unsavePlace,
+  getSavedPlaces,
+  getSavedPlaceIds
 } = require('../controllers/exploreController');
 const { getExplorePosts } = require('../controllers/mediaController');
 
@@ -42,6 +48,13 @@ router.get('/explore/friends-visited', checkAuth, getFriendsVisitedRecently);
 
 // "Spots to Boost Your Points" — highest-value nearby places not yet visited.
 router.get('/explore/points-boost', checkAuth, getPointsBoostSpots);
+
+// ===================== Saved places =====================
+// Full cards for the Saved screen; ids only for marking bookmarks on the feed.
+router.get('/explore/saved', checkAuth, getSavedPlaces);
+router.get('/explore/saved/ids', checkAuth, getSavedPlaceIds);
+router.post('/explore/saved', checkAuth, savePlace);
+router.delete('/explore/saved/:placeId', checkAuth, unsavePlace);
 
 // Visit/Check-in → points award. Accepts an optional evidence photo
 // (multipart field "media"); JSON-only clients still work (no file).

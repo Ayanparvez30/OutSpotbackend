@@ -46,6 +46,7 @@ model User {
   media               Media[]           @relation("UserMedia")
   stories             Story[]
   savedStories        SavedStory[]
+  savedPlaces         SavedPlace[]
 
   friendRequestsSent     Friendship[]          @relation("friendRequestsSent")
   friendRequestsReceived Friendship[]          @relation("friendRequestsReceived")
@@ -69,10 +70,10 @@ model User {
 
   // Per-space bans (community / group). User.isBanned (above) is the GLOBAL
   // admin-team ban; these are the creator/admin-issued local bans.
-  communityBansIssued CommunityBan[] @relation("CommunityBanIssuer")
+  communityBansIssued  CommunityBan[] @relation("CommunityBanIssuer")
   communityBansAgainst CommunityBan[] @relation("CommunityBanTarget")
-  chatBansIssued      ChatBan[]      @relation("ChatBanIssuer")
-  chatBansAgainst     ChatBan[]      @relation("ChatBanTarget")
+  chatBansIssued       ChatBan[]      @relation("ChatBanIssuer")
+  chatBansAgainst      ChatBan[]      @relation("ChatBanTarget")
 
   actedNotifications Notification[] @relation("NotificationActor")
 
@@ -191,6 +192,31 @@ model SavedStory {
   story Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
 
   @@unique([userId, storyId, status])
+}
+
+/// A place the user bookmarked from Explore.
+///
+/// Intentionally stores only what identifies the spot — no photo, rating or
+/// opening hours. Those come from Google and go stale within hours, so the
+/// list endpoint re-reads them through the same `detailsCached` helper the
+/// other Explore endpoints use. Keeping no URL column here also means this
+/// table stays outside `utils/s3Cleanup.js`'s orphan accounting, which only
+/// tracks S3 objects the app itself uploaded.
+model SavedPlace {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  placeId   String
+  placeName String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Saving the same spot twice is a no-op rather than a duplicate row.
+  @@unique([userId, placeId])
+  /// Newest-first listing per user.
+  @@index([userId, createdAt])
 }
 
 model Location {
@@ -473,7 +499,7 @@ model Challenge {
 model ChallengeSchedule {
   id          Int                @id @default(autoincrement())
   frequency   ChallengeFrequency
-  windowKey   String             // DAILY: "yyyy-LL-dd" date; WEEKLY: week-start (Sunday) "yyyy-LL-dd"
+  windowKey   String // DAILY: "yyyy-LL-dd" date; WEEKLY: week-start (Sunday) "yyyy-LL-dd"
   challengeId Int
   challenge   Challenge          @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   createdAt   DateTime           @default(now())
@@ -517,7 +543,7 @@ model Community {
   name String
 
   imageUrl  String?
-  bio       String?  @db.Text // optional community bio/description, set by creator/admin
+  bio       String?            @db.Text // optional community bio/description, set by creator/admin
   creatorId Int
   creator   User               @relation("UserCreatedCommunities", fields: [creatorId], references: [id], onDelete: Cascade)
   members   CommunityMember[]
@@ -606,9 +632,9 @@ model CommunityBan {
   reason      String?
   bannedAt    DateTime @default(now())
 
-  community  Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  user       User      @relation("CommunityBanTarget", fields: [userId], references: [id], onDelete: Cascade)
-  bannedBy   User      @relation("CommunityBanIssuer", fields: [bannedById], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation("CommunityBanTarget", fields: [userId], references: [id], onDelete: Cascade)
+  bannedBy  User      @relation("CommunityBanIssuer", fields: [bannedById], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
   @@index([userId])
@@ -781,8 +807,8 @@ model ItemPurchase {
   id          Int      @id @default(autoincrement())
   userId      Int
   itemId      Int
-  productId   String   // the shared store SKU the payment was made against
-  platform    String   // 'apple' | 'google'
+  productId   String // the shared store SKU the payment was made against
+  platform    String // 'apple' | 'google'
   priceUsd    Decimal  @db.Decimal(10, 2)
   receiptTxId String   @unique // Apple/Google tx id — single-use replay guard
   createdAt   DateTime @default(now())

@@ -1738,3 +1738,157 @@ exports.getPointsBoostSpots = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to load points-boost' });
   }
 };
+
+// ---------------------------------------------------------------------------
+// Saved places — the bookmark on a spot card and the Saved screen behind the
+// top-bar icon.
+//
+// The table holds only placeId + name + coordinates. Photo, rating, price and
+// opening hours are read back from Google through detailsCached, because a
+// bookmark from three weeks ago must not show three-week-old opening hours.
+// ---------------------------------------------------------------------------
+
+// POST /api/explore/saved   { placeId, placeName?, latitude?, longitude? }
+// Idempotent: saving an already-saved place succeeds and changes nothing.
+exports.savePlace = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const { placeId, placeName, latitude, longitude } = req.body || {};
+
+    if (!placeId || typeof placeId !== 'string') {
+      return res.status(400).json({ success: false, error: 'placeId required' });
+    }
+
+    const lat = latitude != null ? parseFloat(latitude) : null;
+    const lng = longitude != null ? parseFloat(longitude) : null;
+
+    const saved = await prisma.savedPlace.upsert({
+      where: { userId_placeId: { userId, placeId } },
+      // Refresh the cached name/coords in case Google renamed the place.
+      update: {
+        placeName: placeName || undefined,
+        latitude: Number.isFinite(lat) ? lat : undefined,
+        longitude: Number.isFinite(lng) ? lng : undefined,
+      },
+      create: {
+        userId,
+        placeId,
+        placeName: placeName || null,
+        latitude: Number.isFinite(lat) ? lat : null,
+        longitude: Number.isFinite(lng) ? lng : null,
+      },
+    });
+
+    return res.json({ success: true, saved: true, id: saved.id });
+  } catch (e) {
+    console.error('savePlace error', e);
+    return res.status(500).json({ success: false, error: 'Failed to save place' });
+  }
+};
+
+// DELETE /api/explore/saved/:placeId
+// Also idempotent: un-saving something that isn't saved is a success.
+exports.unsavePlace = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const { placeId } = req.params;
+    if (!placeId) {
+      return res.status(400).json({ success: false, error: 'placeId required' });
+    }
+
+    await prisma.savedPlace.deleteMany({ where: { userId, placeId } });
+    return res.json({ success: true, saved: false });
+  } catch (e) {
+    console.error('unsavePlace error', e);
+    return res.status(500).json({ success: false, error: 'Failed to unsave place' });
+  }
+};
+
+// GET /api/explore/saved/ids
+// Just the ids, so the feed can mark bookmarks without pulling Google details
+// for every card. Cheap enough to call on every Explore open.
+exports.getSavedPlaceIds = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const rows = await prisma.savedPlace.findMany({
+      where: { userId },
+      select: { placeId: true },
+    });
+    return res.json({ success: true, placeIds: rows.map(r => r.placeId) });
+  } catch (e) {
+    console.error('getSavedPlaceIds error', e);
+    return res.status(500).json({ success: false, error: 'Failed to load saved ids' });
+  }
+};
+
+// GET /api/explore/saved?lat&lng&limit
+// The Saved screen: full cards, newest bookmark first.
+exports.getSavedPlaces = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+    const hasHere = Number.isFinite(lat) && Number.isFinite(lng);
+
+    const rows = await prisma.savedPlace.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    if (!rows.length) {
+      return res.json({ success: true, title: 'Saved Spots', places: [] });
+    }
+
+    // Which friends have been to these, so the card's spotted-here row fills in.
+    const friendIds = await getFriendIds(userId);
+    const friendsByPlace = new Map();
+    if (friendIds.length) {
+      const visits = await prisma.locationPoint.findMany({
+        where: { userId: { in: friendIds }, placeId: { in: rows.map(r => r.placeId) } },
+        select: { placeId: true, userId: true },
+      });
+      for (const v of visits) {
+        if (!friendsByPlace.has(v.placeId)) friendsByPlace.set(v.placeId, new Set());
+        friendsByPlace.get(v.placeId).add(v.userId);
+      }
+    }
+
+    const places = [];
+    for (const row of rows) {
+      let d = null;
+      try { d = await detailsCached(row.placeId); } catch (_) { d = null; }
+
+      const placeLat = d?.geometry?.location?.lat ?? row.latitude;
+      const placeLng = d?.geometry?.location?.lng ?? row.longitude;
+      const distanceMiles =
+        hasHere && Number.isFinite(placeLat) && Number.isFinite(placeLng)
+          ? metersToMiles(haversineMeters({ lat, lng }, { lat: placeLat, lng: placeLng }))
+          : null;
+
+      const friendSet = friendsByPlace.get(row.placeId) || new Set();
+
+      places.push(buildSpotCard({
+        placeId: row.placeId,
+        details: d,
+        fallbackName: row.placeName,
+        fallbackLat: row.latitude,
+        fallbackLng: row.longitude,
+        category: 'Saved',
+        points: pointsForPlace({
+          priceLevel: d?.price_level,
+          userRatingsTotal: d?.user_ratings_total,
+        }),
+        distanceMiles,
+        friendsCount: friendSet.size,
+        friendsPreview: await previewFriends(friendSet),
+      }));
+    }
+
+    return res.json({ success: true, title: 'Saved Spots', places });
+  } catch (e) {
+    console.error('getSavedPlaces error', e);
+    return res.status(500).json({ success: false, error: 'Failed to load saved places' });
+  }
+};
