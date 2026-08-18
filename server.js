@@ -83,6 +83,7 @@ const exploreRoutes = require('./routes/exploreRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const adminChallengeRoutes = require('./routes/adminChallengeRoutes');
 
+app.use('/api', require('./routes/appVersionRoutes'));
 app.use('/api', require('./routes/shopRoutes'));
 app.use('/api', require('./routes/referralRoutes'));
 

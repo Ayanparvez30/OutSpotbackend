@@ -1,0 +1,200 @@
+<%- include('../../partials/flash') %>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">App Version</h4>
+</div>
+
+<div class="alert alert-warning">
+  <strong>Read this before turning Force update on.</strong>
+  Every user on a build below the minimum is stopped at the splash screen and
+  cannot use the app until they update. Two guards stand in the way of a
+  mistake: force is ignored while the store link for that platform is empty, and
+  the minimum can never be set above the latest build. Every save is kept below,
+  so a wrong setting can be undone with <em>Restore</em>.
+</div>
+
+<!-- Current policy -->
+<div class="card mb-4">
+  <div class="card-header">Currently in force</div>
+  <div class="card-body">
+    <% if (!current) { %>
+      <p class="text-muted mb-0">
+        Nothing configured yet — the app opens normally for everyone.
+      </p>
+    <% } else { %>
+      <div class="row">
+        <div class="col-md-3">
+          <div class="text-muted small">Minimum build</div>
+          <div class="h4 mb-0"><%= current.minBuild %></div>
+        </div>
+        <div class="col-md-3">
+          <div class="text-muted small">Latest build</div>
+          <div class="h4 mb-0"><%= current.latestBuild %></div>
+        </div>
+        <div class="col-md-6">
+          <div class="text-muted small">Blocking right now</div>
+          <div>
+            Android:
+            <% if (androidForceLive) { %>
+              <span class="badge bg-danger">Yes — builds under <%= current.minBuild %></span>
+            <% } else { %>
+              <span class="badge bg-secondary">No</span>
+              <% if (current.forceUpdate) { %>
+                <small class="text-muted">(force is on, but the Android store link is empty)</small>
+              <% } %>
+            <% } %>
+          </div>
+          <div class="mt-1">
+            iOS:
+            <% if (iosForceLive) { %>
+              <span class="badge bg-danger">Yes — builds under <%= current.minBuild %></span>
+            <% } else { %>
+              <span class="badge bg-secondary">No</span>
+              <% if (current.forceUpdate) { %>
+                <small class="text-muted">(force is on, but the iOS store link is empty)</small>
+              <% } %>
+            <% } %>
+          </div>
+        </div>
+      </div>
+      <% if (current.message) { %>
+        <hr>
+        <div class="text-muted small">Message shown to users</div>
+        <div><%= current.message %></div>
+      <% } %>
+    <% } %>
+  </div>
+</div>
+
+<!-- New policy -->
+<div class="card mb-4">
+  <div class="card-header">Push a new version policy</div>
+  <div class="card-body">
+    <form method="POST" action="/admin/app-version" id="versionForm">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Minimum build <span class="text-danger">*</span></label>
+          <input type="number" min="1" name="minBuild" class="form-control" required
+                 value="<%= current ? current.minBuild : '' %>">
+          <div class="form-text">
+            The number after <code>+</code> in the app's version
+            (<code>1.0.0+16</code> → <strong>16</strong>). Anyone below this is blocked.
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Latest build <span class="text-danger">*</span></label>
+          <input type="number" min="1" name="latestBuild" class="form-control" required
+                 value="<%= current ? current.latestBuild : '' %>">
+          <div class="form-text">The newest build on the stores.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Message (optional)</label>
+          <input type="text" name="message" class="form-control" maxlength="500"
+                 placeholder="What's new in this version"
+                 value="<%= current && current.message ? current.message : '' %>">
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Android store link</label>
+          <input type="url" name="storeUrlAndroid" class="form-control"
+                 placeholder="https://play.google.com/store/apps/details?id=com.outspot.app"
+                 value="<%= current && current.storeUrlAndroid ? current.storeUrlAndroid : '' %>">
+          <div class="form-text">Force is ignored on Android while this is empty.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">iOS store link</label>
+          <input type="url" name="storeUrlIos" class="form-control"
+                 placeholder="https://apps.apple.com/app/id..."
+                 value="<%= current && current.storeUrlIos ? current.storeUrlIos : '' %>">
+          <div class="form-text">Force is ignored on iOS while this is empty.</div>
+        </div>
+
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="forceUpdate" name="forceUpdate"
+                   <%= current && current.forceUpdate ? 'checked' : '' %>>
+            <label class="form-check-label" for="forceUpdate">
+              <strong>Force update</strong> — block anyone below the minimum build
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <button type="submit" class="btn btn-primary">Save as new version policy</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- History -->
+<div class="card">
+  <div class="card-header">History — every policy ever saved</div>
+  <div class="card-body p-0">
+    <% if (!history || history.length === 0) { %>
+      <p class="text-muted text-center py-4 mb-0">Nothing saved yet.</p>
+    <% } else { %>
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Min</th>
+            <th>Latest</th>
+            <th>Force</th>
+            <th>Message</th>
+            <th>Saved by</th>
+            <th>When</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% history.forEach(function (h, i) { %>
+            <tr class="<%= i === 0 ? 'table-active' : '' %>">
+              <td><%= h.id %></td>
+              <td><strong><%= h.minBuild %></strong></td>
+              <td><%= h.latestBuild %></td>
+              <td>
+                <% if (h.forceUpdate) { %>
+                  <span class="badge bg-danger">On</span>
+                <% } else { %>
+                  <span class="badge bg-secondary">Off</span>
+                <% } %>
+              </td>
+              <td class="text-truncate" style="max-width:220px"><%= h.message || '—' %></td>
+              <td><%= h.createdByAdmin || '—' %></td>
+              <td><small><%= new Date(h.createdAt).toLocaleString() %></small></td>
+              <td class="text-end">
+                <% if (i === 0) { %>
+                  <span class="badge bg-success">In force</span>
+                <% } else { %>
+                  <form method="POST" action="/admin/app-version/<%= h.id %>/restore"
+                        onsubmit="return confirm('Restore this policy? It will be saved as a new entry and take effect immediately.');">
+                    <button class="btn btn-outline-secondary btn-sm">Restore</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
+
+<script>
+  // Spell out the consequence before it happens — this is the one screen that
+  // can lock every user out of the app.
+  document.getElementById('versionForm').addEventListener('submit', function (e) {
+    var force = document.getElementById('forceUpdate').checked;
+    var min = document.querySelector('input[name="minBuild"]').value;
+    var android = document.querySelector('input[name="storeUrlAndroid"]').value.trim();
+    var ios = document.querySelector('input[name="storeUrlIos"]').value.trim();
+    if (!force || (!android && !ios)) return;
+    var where = [android ? 'Android' : null, ios ? 'iOS' : null].filter(Boolean).join(' and ');
+    if (!confirm('Every ' + where + ' user on a build below ' + min +
+                 ' will be blocked from the app until they update.\n\nContinue?')) {
+      e.preventDefault();
+    }
+  });
+</script>

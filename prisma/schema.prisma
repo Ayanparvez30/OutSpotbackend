@@ -220,6 +220,48 @@ model SavedPlace {
   @@index([userId, createdAt])
 }
 
+/// Force-update policy for the mobile app, kept as an append-only log.
+///
+/// One row per change rather than one row edited in place: the admin screen
+/// lists every version that was ever pushed, and rolling back is saving the old
+/// numbers again as a new row. Nothing is ever overwritten, so a bad setting can
+/// always be traced and undone.
+///
+/// The newest row by [createdAt] is the one in force. Build numbers are the
+/// `+16` half of pubspec's `1.0.0+16` — they only ever increase, so comparing
+/// them can't misread "1.10" as older than "1.9".
+///
+/// Deliberately has **no foreign keys and no relations**: it touches nothing
+/// else in the schema, so adding it cannot affect any existing table.
+model AppVersionSetting {
+  id Int @id @default(autoincrement())
+
+  /// Builds below this are blocked when [forceUpdate] is on.
+  minBuild Int
+
+  /// Newest build available, shown as "what you'd be updating to".
+  latestBuild Int
+
+  /// Master switch. Off means the app only informs, never blocks — the safety
+  /// valve if a wrong number ever goes live.
+  forceUpdate Boolean @default(false)
+
+  /// Optional copy shown in the update dialog.
+  message String? @db.VarChar(500)
+
+  /// Where "Update Now" sends the user. Force is ignored while the matching
+  /// URL is empty, so nobody can be locked out of an app they can't update.
+  storeUrlAndroid String? @db.VarChar(500)
+  storeUrlIos     String? @db.VarChar(500)
+
+  /// Which admin saved it, for the history list. Plain text on purpose — a
+  /// relation to AdminUser would mean touching that table.
+  createdByAdmin String?  @db.VarChar(100)
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 /// What the user has typed into Explore search, newest first.
 ///
 /// Server-side rather than on the device so the list survives a reinstall and
