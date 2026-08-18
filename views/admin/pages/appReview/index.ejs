@@ -1,0 +1,146 @@
+<%- include('../../partials/flash') %>
+
+<%
+  // Renders `rating` as filled/empty stars.
+  function stars(n) {
+    var out = '';
+    for (var i = 1; i <= 5; i++) {
+      out += i <= n
+        ? '<i class="bi bi-star-fill text-warning"></i>'
+        : '<i class="bi bi-star text-muted"></i>';
+    }
+    return out;
+  }
+%>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">App Reviews</h4>
+  <span class="text-muted small">Written inside the app — not from Play Store or the App Store</span>
+</div>
+
+<!-- Summary -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body text-center">
+        <div class="text-muted small">Average rating</div>
+        <div class="display-6 mb-1"><%= average %></div>
+        <div class="text-muted small"><%= visible %> visible review<%= visible === 1 ? '' : 's' %></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card h-100">
+      <div class="card-body">
+        <% counts.forEach(function (c) { %>
+          <div class="d-flex align-items-center mb-2">
+            <div style="width:64px" class="small text-nowrap">
+              <%= c.star %> <i class="bi bi-star-fill text-warning"></i>
+            </div>
+            <div class="progress flex-grow-1" style="height:10px">
+              <div class="progress-bar bg-warning"
+                   style="width: <%= visible > 0 ? Math.round((c.count / visible) * 100) : 0 %>%"></div>
+            </div>
+            <div style="width:44px" class="text-end small text-muted"><%= c.count %></div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="mb-3">
+  <a href="/admin/reviews"
+     class="btn btn-sm <%= filter === '' ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
+  <% [5, 4, 3, 2, 1].forEach(function (s) { %>
+    <a href="/admin/reviews?filter=<%= s %>"
+       class="btn btn-sm <%= filter === String(s) ? 'btn-primary' : 'btn-outline-secondary' %>">
+      <%= s %> <i class="bi bi-star-fill"></i>
+    </a>
+  <% }) %>
+  <a href="/admin/reviews?filter=hidden"
+     class="btn btn-sm <%= filter === 'hidden' ? 'btn-dark' : 'btn-outline-dark' %>">Hidden</a>
+</div>
+
+<!-- List -->
+<div class="card">
+  <div class="card-body p-0">
+    <% if (!reviews || reviews.length === 0) { %>
+      <p class="text-muted text-center py-5 mb-0">
+        <% if (filter === 'hidden') { %>
+          Nothing has been hidden.
+        <% } else if (filter) { %>
+          No <%= filter %>-star reviews yet.
+        <% } else { %>
+          No reviews yet. They appear here as users rate the app.
+        <% } %>
+      </p>
+    <% } else { %>
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th style="width:120px">Rating</th>
+            <th>Review</th>
+            <th style="width:150px">Submitted</th>
+            <th style="width:110px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% reviews.forEach(function (r) { %>
+            <tr class="<%= r.hidden ? 'table-secondary' : '' %>">
+              <td>
+                <div class="fw-semibold">
+                  <%= [r.user.firstName, r.user.lastName].filter(Boolean).join(' ') || '—' %>
+                </div>
+                <div class="text-muted small">
+                  <%= r.user.username ? '@' + r.user.username : (r.user.email || 'user #' + r.user.id) %>
+                </div>
+              </td>
+              <td class="text-nowrap"><%- stars(r.rating) %></td>
+              <td>
+                <% if (r.comment) { %>
+                  <div style="white-space:pre-wrap"><%= r.comment %></div>
+                <% } else { %>
+                  <span class="text-muted fst-italic">Rating only, no words</span>
+                <% } %>
+                <% if (r.hidden) { %>
+                  <span class="badge bg-dark mt-1">Hidden</span>
+                <% } %>
+              </td>
+              <td><small><%= new Date(r.createdAt).toLocaleString() %></small></td>
+              <td class="text-end">
+                <form method="POST" action="/admin/reviews/<%= r.id %>/toggle">
+                  <input type="hidden" name="back" value="<%= baseUrl %>">
+                  <button class="btn btn-sm <%= r.hidden ? 'btn-outline-success' : 'btn-outline-dark' %>">
+                    <%= r.hidden ? 'Unhide' : 'Hide' %>
+                  </button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <% if (totalPages > 1) { %>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <small class="text-muted">Page <%= page %> of <%= totalPages %> — <%= total %> total</small>
+      <div>
+        <% var sep = baseUrl.indexOf('?') === -1 ? '?' : '&'; %>
+        <a class="btn btn-sm btn-outline-secondary <%= page <= 1 ? 'disabled' : '' %>"
+           href="<%= baseUrl + sep + 'page=' + (page - 1) %>">Previous</a>
+        <a class="btn btn-sm btn-outline-secondary <%= page >= totalPages ? 'disabled' : '' %>"
+           href="<%= baseUrl + sep + 'page=' + (page + 1) %>">Next</a>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<p class="text-muted small mt-3 mb-0">
+  Hiding keeps the review in the database and still counts as "this user has
+  reviewed", so the app will not ask them again. Nothing here changes what a
+  user wrote.
+</p>

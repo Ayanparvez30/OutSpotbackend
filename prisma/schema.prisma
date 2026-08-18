@@ -85,6 +85,7 @@ model User {
   itemPurchases        ItemPurchase[]
   communityHistory     CommunityHistory[]
   chatLocks            ChatLock[]
+  appReviews           AppReview[]
   notificationRedDot   Boolean               @default(false)
 
   // Admin panel fields
@@ -923,4 +924,33 @@ model PremadeAvatar {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// A user's rating of the app itself (1-5 stars plus optional words).
+///
+/// One row per user, edited in place rather than appended, so "Rate OutSpot"
+/// in Settings updates the same review instead of stacking duplicates. The
+/// admin panel can hide a review but never rewrites it — hiding is reversible
+/// and leaves the user's own words intact.
+///
+/// Only reviews written inside the app land here. Play Store / App Store
+/// ratings are invisible to us: neither store reports back who rated or what
+/// they wrote.
+model AppReview {
+  id     Int     @id @default(autoincrement())
+  userId Int     @unique
+  rating Int
+  comment String? @db.VarChar(1000)
+
+  /// Admin-controlled. Hidden reviews stay in the table and keep counting
+  /// as "this user has reviewed", so hiding never re-triggers the prompt.
+  hidden Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([hidden, createdAt])
+  @@index([rating])
 }
