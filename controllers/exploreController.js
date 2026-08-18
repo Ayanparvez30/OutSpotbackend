@@ -430,6 +430,10 @@ function mapPlace(p, lat, lng) {
     priceRange: priceLevelToRange(p.price_level) || '',
     businessStatus: p.business_status || null,
     types: p.types || [],
+    // Wheelchair glyph on the redesign's cards. Comes from the search response
+    // now that accessibilityOptions is in SEARCH_FIELD_MASK; Google omits the
+    // field for places it has no data on, so undefined → false, never "no".
+    accessible: p.wheelchair_accessible_entrance === true,
   };
 }
 
@@ -1437,6 +1441,8 @@ out.push({
   totalReviews: Number(d?.user_ratings_total ?? 0),
   businessStatus: d?.business_status || null,
   types: d?.types || [],
+  // Details is already fetched above, so this costs nothing extra.
+  accessible: d?.wheelchair_accessible_entrance === true,
 
   visitCount: g._count?.placeId || 0,     
   uniqueUsers: uniqueUsersMap.get(placeId)?.size || 0,
@@ -1715,7 +1721,7 @@ exports.getPointsBoostSpots = async (req, res) => {
         image: p.photoUrl || '',
         category: 'Points Boost',
         totalReviews: p.userRatingsTotal || 0,
-        accessible: false, // needs a Details call; the list view doesn't make one
+        // mapPlace already carries this through from the search response.
         friendsCount: friendSet.size,
         friendsPreview: await previewFriends(friendSet),
       });

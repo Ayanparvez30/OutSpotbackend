@@ -23,6 +23,11 @@ const SEARCH_FIELD_MASK = [
   'places.businessStatus',
   'places.regularOpeningHours',
   'places.currentOpeningHours',
+  // Wheelchair glyph on the redesign's spot cards. Same Enterprise tier as the
+  // rating / priceLevel / openingHours fields already requested above, so this
+  // should not move the call into a costlier SKU — worth confirming in the
+  // Google Cloud billing console after the first day live.
+  'places.accessibilityOptions',
 ].join(',');
 
 // Field mask for details (single place) — no `places.` prefix on the v1 single-resource endpoint.
