@@ -241,8 +241,11 @@ const CATEGORIES = [
     textQueries: ['coffee shops', 'cafes', 'bakeries', 'espresso bar'] },
   { key: 'dessert',      title: 'Dessert',      icon: '🍨', imageKey: 'dessert',
     googleTypes: ['dessert_shop', 'ice_cream_shop', 'donut_shop', 'candy_store', 'chocolate_shop'],
-    extraTypes: ['dessert_restaurant', 'acai_shop', 'bubble_tea_store', 'frozen_yogurt_shop',
-      'confectionery', 'cupcake_shop', 'pastry_shop'],
+    // bubble_tea_store / frozen_yogurt_shop / cupcake_shop were in this list
+    // but Google's Places API (New) rejects them as unsupported types — every
+    // fetch logged INVALID_ARGUMENT and burned a call for nothing. The text
+    // queries below still surface those shops.
+    extraTypes: ['dessert_restaurant', 'acai_shop', 'confectionery', 'pastry_shop'],
     textQueries: ['dessert', 'ice cream', 'donuts', 'bubble tea', 'cake shop', 'frozen yogurt', 'gelato'] },
   { key: 'restaurants',  title: 'Restaurants',  icon: '🍽️', imageKey: 'restaurants',
     googleTypes: ['restaurant', 'meal_takeaway', 'meal_delivery', 'fast_food_restaurant', 'fine_dining_restaurant', 'brunch_restaurant', 'breakfast_restaurant'],
@@ -766,6 +769,25 @@ exports.getPlaceDetail = async (req, res) => {
     const lng = parseFloat(req.query.lng);
     const d = await details(placeId);
 
+    // Which of this user's friends have checked in here. The map's bottom sheet
+    // shows a "Friends Spotted" card, and this is the only call it makes, so the
+    // data rides along rather than costing a second round trip.
+    const userId = req.authData?.id;
+    let friendsCount = 0;
+    let friendsPreview = [];
+    if (userId) {
+      const friendIds = await getFriendIds(userId);
+      if (friendIds.length) {
+        const visits = await prisma.locationPoint.findMany({
+          where: { userId: { in: friendIds }, placeId },
+          select: { userId: true },
+          distinct: ['userId'],
+        });
+        friendsCount = visits.length;
+        friendsPreview = await previewFriends(visits.map(v => v.userId));
+      }
+    }
+
     const photos = buildPhotosArray(d, 8);
     const image = photos[0] || photoUrlByRef(d.photos?.[0]?.photo_reference, 4800) || '';
     const openNow = d.opening_hours?.open_now ?? null;
@@ -903,6 +925,9 @@ exports.getPlaceDetail = async (req, res) => {
       reviews,
       businessStatus: d.business_status || null,
       types: d.types || [],
+      accessible: d.wheelchair_accessible_entrance === true,
+      friendsCount,
+      friendsPreview,
     });
   } catch (e) {
     console.error('place detail error', e);
