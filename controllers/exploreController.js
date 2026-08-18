@@ -233,8 +233,17 @@ const CATEGORIES = [
     // `bakery` earns its place: Tatte, Flour Bakery + Cafe and L.A. Burdick are
     // tagged bakery+restaurant, never `cafe`, so a cafe-only list omitted them.
     googleTypes: ['cafe', 'coffee_shop', 'bakery', 'tea_house'],
-    extraTypes: ['dessert_shop', 'donut_shop', 'ice_cream_shop', 'juice_shop', 'bagel_shop', 'internet_cafe', 'cat_cafe'],
+    // dessert_shop / donut_shop / ice_cream_shop moved to the `dessert` bucket
+    // below — the redesign gives Dessert its own filter pill and carousel, so
+    // leaving them here would make the two lists return the same places.
+    // `bakery` stays a cafe for the reason above; juice/bagel stay too.
+    extraTypes: ['juice_shop', 'bagel_shop', 'internet_cafe', 'cat_cafe'],
     textQueries: ['coffee shops', 'cafes', 'bakeries', 'espresso bar'] },
+  { key: 'dessert',      title: 'Dessert',      icon: '🍨', imageKey: 'dessert',
+    googleTypes: ['dessert_shop', 'ice_cream_shop', 'donut_shop', 'candy_store', 'chocolate_shop'],
+    extraTypes: ['dessert_restaurant', 'acai_shop', 'bubble_tea_store', 'frozen_yogurt_shop',
+      'confectionery', 'cupcake_shop', 'pastry_shop'],
+    textQueries: ['dessert', 'ice cream', 'donuts', 'bubble tea', 'cake shop', 'frozen yogurt', 'gelato'] },
   { key: 'restaurants',  title: 'Restaurants',  icon: '🍽️', imageKey: 'restaurants',
     googleTypes: ['restaurant', 'meal_takeaway', 'meal_delivery', 'fast_food_restaurant', 'fine_dining_restaurant', 'brunch_restaurant', 'breakfast_restaurant'],
     extraTypes: ['american_restaurant', 'italian_restaurant', 'pizza_restaurant', 'sushi_restaurant', 'japanese_restaurant',
@@ -1460,5 +1469,266 @@ out.push({
   } catch (e) {
     console.error('getTopTrendingWeekRestaurants error', e);
     return res.status(500).json({ success: false, error: 'Failed to load trending week' });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Explore redesign — two feed sections the new design asks for.
+//
+// Both reuse the existing pipeline (LocationPoint for visits, detailsCached for
+// Google data, getUserAvatar for minimes) and add no tables, so they ship on a
+// plain deploy with no migration.
+// ---------------------------------------------------------------------------
+
+// Shared shaper so a redesign card looks identical whichever section served it.
+// Mirrors the object getTopTrendingWeekRestaurants returns.
+function buildSpotCard({ placeId, details: d, fallbackName, fallbackLat, fallbackLng, category, points, distanceMiles, friendsCount, friendsPreview }) {
+  const photos = buildPhotosArray(d, 8);
+  return {
+    id: String(placeId),
+    placeId: String(placeId),
+    name: d?.name || fallbackName || '',
+    address: d?.formatted_address || '',
+    website: d?.website || '',
+    googleMapsUrl: d?.url || '',
+    lat: d?.geometry?.location?.lat ?? fallbackLat,
+    lng: d?.geometry?.location?.lng ?? fallbackLng,
+
+    image: photos[0] || '',
+    photos,
+
+    category,
+    priceLevel: d?.price_level ?? null,
+    priceRange: priceLevelToRange(d?.price_level) || '',
+    openNow: d?.opening_hours?.open_now ?? null,
+    status: openNowToStatus(d?.opening_hours?.open_now),
+    openingHours: d?.opening_hours?.weekday_text || [],
+
+    rating: Number(d?.rating ?? 0),
+    totalReviews: Number(d?.user_ratings_total ?? 0),
+    businessStatus: d?.business_status || null,
+    types: d?.types || [],
+
+    // Google exposes this on Details; the card renders a wheelchair glyph when
+    // it's true and simply omits it otherwise.
+    accessible: d?.wheelchair_accessible_entrance === true,
+
+    points,
+    distanceMiles,
+    friendsCount,
+    friendsPreview,
+  };
+}
+
+// Resolve up to 3 friends per place into { id, username, name, avatar }.
+async function previewFriends(friendIds) {
+  const ids = [...friendIds].slice(0, 3);
+  if (!ids.length) return [];
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, username: true, firstName: true, lastName: true },
+  });
+  const out = [];
+  for (const u of users) {
+    out.push({
+      id: u.id,
+      username: u.username,
+      name: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+      avatar: await getUserAvatar(u.id),
+    });
+  }
+  return out;
+}
+
+// GET /api/explore/friends-visited?lat&lng&radius&limit&days
+// "Spots Your Friends Visited Recently" — newest friend check-in first.
+exports.getFriendsVisitedRecently = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const radius = req.query.radius ? parseInt(req.query.radius, 10) : 16093;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 10;
+    const days = req.query.days ? parseInt(req.query.days, 10) : 30;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ success: false, error: 'lat/lng required' });
+    }
+
+    const friendIds = await getFriendIds(userId);
+    if (!friendIds.length) {
+      return res.json({ success: true, title: 'Spots Your Friends Visited Recently', places: [] });
+    }
+
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Newest first, so the first row seen for a placeId is its latest visit.
+    // Over-fetch because the radius filter below drops far-away places.
+    const visits = await prisma.locationPoint.findMany({
+      where: {
+        userId: { in: friendIds },
+        createdAt: { gte: since },
+        placeId: { not: null },
+        latitude: { not: null },
+        longitude: { not: null },
+      },
+      select: {
+        placeId: true, userId: true, placeName: true,
+        latitude: true, longitude: true, points: true, createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit * 20,
+    });
+
+    const byPlace = new Map(); // placeId -> { latest, friends:Set, points }
+    for (const v of visits) {
+      let e = byPlace.get(v.placeId);
+      if (!e) {
+        e = { latest: v, friends: new Set(), points: v.points || 0 };
+        byPlace.set(v.placeId, e);
+      }
+      e.friends.add(v.userId);
+    }
+
+    const here = { lat, lng };
+    const out = [];
+
+    for (const [placeId, e] of byPlace) {
+      const dMeters = haversineMeters(here, { lat: e.latest.latitude, lng: e.latest.longitude });
+      if (dMeters > radius) continue;
+
+      let d = null;
+      try { d = await detailsCached(placeId); } catch (_) { d = null; }
+
+      out.push(buildSpotCard({
+        placeId,
+        details: d,
+        fallbackName: e.latest.placeName,
+        fallbackLat: e.latest.latitude,
+        fallbackLng: e.latest.longitude,
+        category: 'Visited',
+        points: pointsForPlace({
+          priceLevel: d?.price_level,
+          userRatingsTotal: d?.user_ratings_total,
+        }),
+        distanceMiles: metersToMiles(dMeters),
+        friendsCount: e.friends.size,
+        friendsPreview: await previewFriends(e.friends),
+      }));
+
+      if (out.length >= limit) break;
+    }
+
+    return res.json({
+      success: true,
+      title: 'Spots Your Friends Visited Recently',
+      since,
+      radius,
+      places: out,
+    });
+  } catch (e) {
+    console.error('getFriendsVisitedRecently error', e);
+    return res.status(500).json({ success: false, error: 'Failed to load friends-visited' });
+  }
+};
+
+// GET /api/explore/points-boost?lat&lng&radius&limit
+// "Spots to Boost Your Points" — nearby places worth the most points that the
+// user hasn't checked in at yet.
+//
+// Candidates come from the same cached category buckets the rest of the feed
+// uses, so on a warm cache this costs no extra Google calls.
+exports.getPointsBoostSpots = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const lat = parseFloat(req.query.lat);
+    const lng = parseFloat(req.query.lng);
+    const radius = req.query.radius ? parseInt(req.query.radius, 10) : 16093;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 10;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ success: false, error: 'lat/lng required' });
+    }
+
+    // The buckets most likely to be warm already — restaurants and bars carry
+    // the high price levels that drive the points formula.
+    const buckets = ['restaurants', 'bars', 'cafes'];
+    const seen = new Map(); // placeId -> mapped place
+
+    for (const key of buckets) {
+      const cat = findCat(key);
+      if (!cat) continue;
+      let candidates = [];
+      try {
+        candidates = await getCategoryCandidates({ cat, lat, lng, radius, requiredCount: 60 });
+      } catch (e) {
+        console.error(`getPointsBoostSpots: ${key} candidates failed`, e);
+        continue;
+      }
+      for (const p of candidates) {
+        if (!p?.place_id || seen.has(p.place_id)) continue;
+        seen.set(p.place_id, mapPlace(p, lat, lng));
+      }
+    }
+
+    if (!seen.size) {
+      return res.json({ success: true, title: 'Spots to Boost Your Points', places: [] });
+    }
+
+    // Drop anywhere this user has already been — the point of the section is
+    // somewhere new to earn at.
+    const visited = await prisma.locationPoint.findMany({
+      where: { userId, placeId: { in: [...seen.keys()] } },
+      select: { placeId: true },
+      distinct: ['placeId'],
+    });
+    for (const v of visited) seen.delete(v.placeId);
+
+    const ranked = [...seen.values()]
+      .filter(p => (p.points || 0) > 0)
+      .sort((a, b) =>
+        (b.points || 0) - (a.points || 0) ||
+        (a.distanceMiles ?? 9e9) - (b.distanceMiles ?? 9e9)
+      )
+      .slice(0, limit);
+
+    // Which friends have been to these, so the card's spotted-here row fills in.
+    const friendIds = await getFriendIds(userId);
+    const friendsByPlace = new Map();
+    if (friendIds.length && ranked.length) {
+      const friendVisits = await prisma.locationPoint.findMany({
+        where: { userId: { in: friendIds }, placeId: { in: ranked.map(p => p.placeId) } },
+        select: { placeId: true, userId: true },
+      });
+      for (const v of friendVisits) {
+        if (!friendsByPlace.has(v.placeId)) friendsByPlace.set(v.placeId, new Set());
+        friendsByPlace.get(v.placeId).add(v.userId);
+      }
+    }
+
+    const places = [];
+    for (const p of ranked) {
+      const friendSet = friendsByPlace.get(p.placeId) || new Set();
+      places.push({
+        ...p,
+        id: String(p.placeId),
+        image: p.photoUrl || '',
+        category: 'Points Boost',
+        totalReviews: p.userRatingsTotal || 0,
+        accessible: false, // needs a Details call; the list view doesn't make one
+        friendsCount: friendSet.size,
+        friendsPreview: await previewFriends(friendSet),
+      });
+    }
+
+    return res.json({
+      success: true,
+      title: 'Spots to Boost Your Points',
+      radius,
+      places,
+    });
+  } catch (e) {
+    console.error('getPointsBoostSpots error', e);
+    return res.status(500).json({ success: false, error: 'Failed to load points-boost' });
   }
 };

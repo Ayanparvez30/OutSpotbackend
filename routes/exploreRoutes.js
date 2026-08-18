@@ -13,7 +13,11 @@ const {
   // ✅ Restaurants
   getRestaurantCategories,
   getRestaurantsByCategory,
-  getTopTrendingWeekRestaurants
+  getTopTrendingWeekRestaurants,
+
+  // ✅ Explore redesign feed sections
+  getFriendsVisitedRecently,
+  getPointsBoostSpots
 } = require('../controllers/exploreController');
 const { getExplorePosts } = require('../controllers/mediaController');
 
@@ -31,6 +35,13 @@ router.get('/explore/posts', checkAuth, getExplorePosts);
 
 // Optional detail
 router.get('/explore/place/:placeId', checkAuth, getPlaceDetail);
+
+// ===================== Explore redesign feed =====================
+// "Spots Your Friends Visited Recently" — friends' check-ins, newest first.
+router.get('/explore/friends-visited', checkAuth, getFriendsVisitedRecently);
+
+// "Spots to Boost Your Points" — highest-value nearby places not yet visited.
+router.get('/explore/points-boost', checkAuth, getPointsBoostSpots);
 
 // Visit/Check-in → points award. Accepts an optional evidence photo
 // (multipart field "media"); JSON-only clients still work (no file).
