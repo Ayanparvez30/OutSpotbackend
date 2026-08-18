@@ -23,7 +23,13 @@ const {
   savePlace,
   unsavePlace,
   getSavedPlaces,
-  getSavedPlaceIds
+  getSavedPlaceIds,
+
+  // ✅ Search history
+  getSearchHistory,
+  addSearchHistory,
+  deleteSearchHistory,
+  clearSearchHistory
 } = require('../controllers/exploreController');
 const { getExplorePosts } = require('../controllers/mediaController');
 
@@ -55,6 +61,13 @@ router.get('/explore/saved', checkAuth, getSavedPlaces);
 router.get('/explore/saved/ids', checkAuth, getSavedPlaceIds);
 router.post('/explore/saved', checkAuth, savePlace);
 router.delete('/explore/saved/:placeId', checkAuth, unsavePlace);
+
+// ===================== Search history =====================
+// DELETE with no id clears the lot; with an id removes that one entry.
+router.get('/explore/search-history', checkAuth, getSearchHistory);
+router.post('/explore/search-history', checkAuth, addSearchHistory);
+router.delete('/explore/search-history', checkAuth, clearSearchHistory);
+router.delete('/explore/search-history/:id', checkAuth, deleteSearchHistory);
 
 // Visit/Check-in → points award. Accepts an optional evidence photo
 // (multipart field "media"); JSON-only clients still work (no file).

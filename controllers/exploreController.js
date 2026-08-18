@@ -1892,3 +1892,101 @@ exports.getSavedPlaces = async (req, res) => {
     return res.status(500).json({ success: false, error: 'Failed to load saved places' });
   }
 };
+
+// ---------------------------------------------------------------------------
+// Explore search history.
+//
+// Stored per user rather than on the device so it survives a reinstall. Only
+// the typed phrase is kept — results go stale, and re-running the search live
+// is both fresher and cheaper than caching places nobody may revisit.
+// ---------------------------------------------------------------------------
+
+/// Longest phrase worth keeping. The column is VARCHAR(191); anything past
+/// that is a paste accident, not a search.
+const SEARCH_HISTORY_MAX_LEN = 100;
+
+/// How many entries a user's history holds before the oldest fall off.
+const SEARCH_HISTORY_KEEP = 20;
+
+// GET /api/explore/search-history
+exports.getSearchHistory = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const rows = await prisma.searchHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: SEARCH_HISTORY_KEEP,
+      select: { id: true, query: true, createdAt: true },
+    });
+    return res.json({ success: true, history: rows });
+  } catch (e) {
+    console.error('getSearchHistory error', e);
+    return res.status(500).json({ success: false, error: 'Failed to load history' });
+  }
+};
+
+// POST /api/explore/search-history   { query }
+// Re-searching an existing phrase bumps it to the top rather than duplicating.
+exports.addSearchHistory = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const raw = (req.body?.query ?? '').toString().trim();
+    if (!raw) {
+      return res.status(400).json({ success: false, error: 'query required' });
+    }
+    const query = raw.slice(0, SEARCH_HISTORY_MAX_LEN);
+
+    const row = await prisma.searchHistory.upsert({
+      where: { userId_query: { userId, query } },
+      update: { createdAt: new Date() },
+      create: { userId, query },
+    });
+
+    // Trim the tail so the table can't grow without bound per user.
+    const stale = await prisma.searchHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      skip: SEARCH_HISTORY_KEEP,
+      select: { id: true },
+    });
+    if (stale.length) {
+      await prisma.searchHistory.deleteMany({
+        where: { id: { in: stale.map(s => s.id) } },
+      });
+    }
+
+    return res.json({ success: true, id: row.id, query: row.query });
+  } catch (e) {
+    console.error('addSearchHistory error', e);
+    return res.status(500).json({ success: false, error: 'Failed to save history' });
+  }
+};
+
+// DELETE /api/explore/search-history/:id — one entry.
+// Scoped to the caller, so an id from another account matches nothing.
+exports.deleteSearchHistory = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ success: false, error: 'bad id' });
+    }
+    await prisma.searchHistory.deleteMany({ where: { id, userId } });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('deleteSearchHistory error', e);
+    return res.status(500).json({ success: false, error: 'Failed to delete entry' });
+  }
+};
+
+// DELETE /api/explore/search-history — clear all.
+exports.clearSearchHistory = async (req, res) => {
+  try {
+    const userId = req.authData.id;
+    const { count } = await prisma.searchHistory.deleteMany({ where: { userId } });
+    return res.json({ success: true, cleared: count });
+  } catch (e) {
+    console.error('clearSearchHistory error', e);
+    return res.status(500).json({ success: false, error: 'Failed to clear history' });
+  }
+};

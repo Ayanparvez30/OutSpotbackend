@@ -47,6 +47,7 @@ model User {
   stories             Story[]
   savedStories        SavedStory[]
   savedPlaces         SavedPlace[]
+  searchHistory       SearchHistory[]
 
   friendRequestsSent     Friendship[]          @relation("friendRequestsSent")
   friendRequestsReceived Friendship[]          @relation("friendRequestsReceived")
@@ -216,6 +217,26 @@ model SavedPlace {
   /// Saving the same spot twice is a no-op rather than a duplicate row.
   @@unique([userId, placeId])
   /// Newest-first listing per user.
+  @@index([userId, createdAt])
+}
+
+/// What the user has typed into Explore search, newest first.
+///
+/// Server-side rather than on the device so the list survives a reinstall and
+/// follows the user to a new phone. Stores the query text only — no results,
+/// which would be stale within the hour anyway; tapping an entry re-runs the
+/// search live.
+model SearchHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  query     String   @db.VarChar(191)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Searching the same phrase again bumps its timestamp instead of adding a
+  /// second row, so the list never fills with repeats.
+  @@unique([userId, query])
   @@index([userId, createdAt])
 }
 
