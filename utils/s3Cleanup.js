@@ -35,6 +35,11 @@ async function countReferences(url) {
     prisma.bodyShape.count({   where: { imageUrl: url } }),
     prisma.shopItem.count({    where: { imageUrl: url } }),
     prisma.premadeAvatar.count({ where: { imageUrl: url } }),
+    // Spots the admin published and the user suggestions behind them. Both
+    // carry an S3 photo, so both must be counted here or rejecting one
+    // suggestion would delete a photo a live map spot is still showing.
+    prisma.mapSpot.count({        where: { imageUrl: url } }),
+    prisma.spotSuggestion.count({ where: { imageUrl: url } }),
   ]);
   return checks.reduce((a, b) => a + b, 0);
 }

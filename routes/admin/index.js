@@ -21,6 +21,7 @@ router.use((req, res, next) => {
 router.use('/dashboard', require('./dashboardRoutes'));
 router.use('/app-version', require('./appVersionRoutes'));
 router.use('/reviews', require('./appReviewRoutes'));
+router.use('/locations', require('./mapSpotRoutes'));
 router.use('/users', require('./userRoutes'));
 router.use('/communities', require('./communityRoutes'));
 router.use('/friends', require('./friendRoutes'));

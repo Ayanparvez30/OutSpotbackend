@@ -93,7 +93,8 @@ require.cache[pointsUtilPath] = {
   },
 };
 
-// Stub PrismaClient. Need: locationPoint.findFirst/findMany/create, activeMultiplier.findFirst.
+// Stub PrismaClient. Need: locationPoint.findFirst/findMany/create,
+// activeMultiplier.findFirst, and mapSpot for the custom-spot merge.
 let createdLocationPoint = null;
 const fakePrisma = {
   locationPoint: {
@@ -106,6 +107,12 @@ const fakePrisma = {
   },
   activeMultiplier: {
     findFirst: async () => null,
+  },
+  // Custom map spots. Empty here on purpose: these tests are about how Google
+  // places are priced, so no OutSpot-published spot should join the results.
+  mapSpot: {
+    findMany: async () => [],
+    findUnique: async () => null,
   },
 };
 

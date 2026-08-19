@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, detailsCached, textSearch, textSearchAll, photoUrlByRef } = require('../utils/googlePlaces');
 const { addPointsWithMultiplier } = require('../utils/points');
+const mapSpots = require('./mapSpotController');
 const { pointsForPlace } = require('../utils/pointsForPlace');
 const uploadToS3 = require('../utils/s3Upload');
 
@@ -468,9 +469,27 @@ exports.getCategoryPlaces = async (req, res) => {
     const requiredCount = (page + 1) * pageSize;
 
     const candidates = await getCategoryCandidates({ cat, lat, lng, radius, requiredCount });
-    const totalCount = candidates.length;
-    const slice = candidates.slice(offset, offset + pageSize);
-    const items = slice.map(p => ({ ...mapPlace(p, lat, lng), category: cat.title }));
+
+    // Spots OutSpot published itself, which Google has never heard of. They go
+    // in front of the Google results — there are only ever a handful, they are
+    // the nearest small places, and burying them on page 3 would defeat the
+    // point of adding them. Everything below paginates across the two lists as
+    // one, so the Google path itself is untouched.
+    const customCards = (
+      await mapSpots.nearbyMapSpots({ categoryKey: cat.key, lat, lng, radius })
+    ).map(sp => ({ ...mapSpots.toPlaceCard(sp, lat, lng), category: cat.title }));
+
+    const totalCount = customCards.length + candidates.length;
+    const items = [];
+    for (let i = offset; i < Math.min(offset + pageSize, totalCount); i++) {
+      items.push(
+        i < customCards.length
+          ? customCards[i]
+          // mapPlace stays lazy — only the page being rendered is converted,
+          // exactly as before.
+          : { ...mapPlace(candidates[i - customCards.length], lat, lng), category: cat.title },
+      );
+    }
     const hasMore = offset + items.length < totalCount;
 
     res.json({
@@ -605,8 +624,26 @@ exports.recordVisit = async (req, res) => {
     let placeReviewCount = null;
     let placeOpenNow = null;     // null/undefined = hours unknown → allow
     let placeBizStatus = null;
+    // Set when this placeId is one of ours; drives the radius and the points
+    // below, both of which the admin chose rather than Google.
+    let customSpot = null;
 
-    try {
+    // Ours, not Google's. Everything Google would supply either comes off the
+    // row or stays null — and null already reads as "hours unknown, allow" in
+    // the closed-place check below, which is right for a spot that has no
+    // opening hours to begin with.
+    customSpot = await mapSpots.findByPlaceId(placeId);
+    if (customSpot) {
+      if (!customSpot.active) {
+        return res.status(404).json({
+          awarded: false,
+          error: 'This spot is no longer available',
+        });
+      }
+      placeLat = customSpot.latitude;
+      placeLng = customSpot.longitude;
+      placeNameFromGoogle = customSpot.name;
+    } else try {
       const d = await details(placeId);
       placeLat = d?.geometry?.location?.lat ?? null;
       placeLng = d?.geometry?.location?.lng ?? null;
@@ -654,16 +691,22 @@ exports.recordVisit = async (req, res) => {
       lat >= viewport.southwest.lat && lat <= viewport.northeast.lat &&
       lng >= viewport.southwest.lng && lng <= viewport.northeast.lng;
 
-    if (!insideViewport && distToPlace > MAX_PLACE_DISTANCE_METERS) {
+    // Our spots carry their own radius: a park needs more room than a cafe,
+    // and there is no Google viewport to fall back on for them.
+    const allowedRadius = customSpot
+      ? customSpot.radiusMeters
+      : MAX_PLACE_DISTANCE_METERS;
+
+    if (!insideViewport && distToPlace > allowedRadius) {
       const dist = Math.round(distToPlace);
-      console.log(`[recordVisit] too-far user=${userId} placeId=${placeId} dist=${dist}m max=${MAX_PLACE_DISTANCE_METERS}m viewport=${viewport ? 'present-but-outside' : 'absent'}`);
+      console.log(`[recordVisit] too-far user=${userId} placeId=${placeId} dist=${dist}m max=${allowedRadius}m viewport=${viewport ? 'present-but-outside' : 'absent'}`);
       return res.status(403).json({
         awarded: false,
         reason: 'too-far-from-place',
-        message: `You need to be within ${MAX_PLACE_DISTANCE_METERS}m of this place to check in. You are currently ${dist}m away.`,
+        message: `You need to be within ${allowedRadius}m of this place to check in. You are currently ${dist}m away.`,
         placeId,
         distanceMiles: metersToMiles(dist),
-        maxMiles: metersToMiles(MAX_PLACE_DISTANCE_METERS),
+        maxMiles: metersToMiles(allowedRadius),
       });
     }
 
@@ -717,10 +760,14 @@ exports.recordVisit = async (req, res) => {
     /* ---------- 3) Create + award ---------- */
     // Points from Google price_level + user_ratings_total per launch spec
     // (pointsForPlace handles null/no-data fallback via review-count tiers).
-    const points = pointsForPlace({
-      priceLevel: placePriceLevel,
-      userRatingsTotal: placeReviewCount,
-    });
+    // Google spots price themselves off price_level and review count; ours have
+    // neither, so the admin's number is the whole answer.
+    const points = customSpot
+      ? customSpot.points
+      : pointsForPlace({
+          priceLevel: placePriceLevel,
+          userRatingsTotal: placeReviewCount,
+        });
 
     // Evidence photo: prefer the uploaded file (check-in camera capture); fall
     // back to a mediaUrl passed in the body (older clients), else empty string.
@@ -762,11 +809,99 @@ exports.recordVisit = async (req, res) => {
   }
 };
 
+/// Everything the detail screen needs about one of *our* spots.
+///
+/// Kept in the same response shape Google spots produce, with the fields Google
+/// would fill left empty rather than absent — the Flutter screen parses one
+/// shape and neither knows nor cares which kind it got. Returns null when the
+/// id isn't ours, so the caller falls through to Google.
+async function customPlaceDetail(placeId, lat, lng, userId) {
+  const spot = await mapSpots.findByPlaceId(placeId);
+  if (!spot) return null;
+
+  const photos = spot.imageUrl ? [spot.imageUrl] : [];
+  const distanceMiles =
+    Number.isFinite(lat) && Number.isFinite(lng)
+      ? metersToMiles(
+          mapSpots.haversineMeters(
+            { lat, lng },
+            { lat: spot.latitude, lng: spot.longitude },
+          ),
+        )
+      : null;
+
+  // Friends who checked in here — same query the Google branch runs, since
+  // LocationPoint stores whichever place id was checked into.
+  let friendsCount = 0;
+  let friendsPreview = [];
+  if (userId) {
+    const friendIds = await getFriendIds(userId);
+    if (friendIds.length) {
+      const visits = await prisma.locationPoint.findMany({
+        where: { userId: { in: friendIds }, placeId },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+      friendsCount = visits.length;
+      friendsPreview = await previewFriends(visits.map(v => v.userId));
+    }
+  }
+
+  return {
+    id: spot.placeId,
+    name: spot.name,
+    address: spot.address || '',
+    phone: '',
+    website: '',
+    googleMapsUrl: `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`,
+    lat: spot.latitude,
+    lng: spot.longitude,
+    distanceMiles,
+    image: photos[0] || '',
+    photos,
+    description: spot.description || null,
+    category: spot.categoryKey,
+    sections: [],
+    cuisine: [],
+    meals: [],
+    drinks: [],
+    dietary: [],
+    services: {},
+    priceLevel: null,
+    priceRange: '',
+    openNow: null,
+    status: '',
+    openingHours: [],
+    rating: 0,
+    totalReviews: 0,
+    reviews: [],
+    businessStatus: null,
+    types: [],
+    accessible: false,
+    friendsCount,
+    friendsPreview,
+    // What a check-in here is worth, since there is no Google price/rating to
+    // derive it from.
+    points: spot.points,
+    isCustomSpot: true,
+  };
+}
+
 exports.getPlaceDetail = async (req, res) => {
   try {
     const { placeId } = req.params;
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
+
+    // Ours, not Google's — answered from our own table. Asking Google for an
+    // `outspot_...` id returns INVALID_ARGUMENT, which is what used to make
+    // tapping one of these cards fail with a 500.
+    if (mapSpots.isCustomPlaceId(placeId)) {
+      const custom = await customPlaceDetail(placeId, lat, lng, req.authData?.id);
+      if (custom) return res.json(custom);
+      return res.status(404).json({ error: 'Spot not found' });
+    }
+
     const d = await details(placeId);
 
     // Which of this user's friends have checked in here. The map's bottom sheet
@@ -1099,9 +1234,22 @@ exports.getRestaurantsByCategory = async (req, res) => {
     // We ask for enough places to cover current page + a buffer of one extra page.
     const requiredCount = (page + 1) * pageSize;
     const candidates = await getCategoryCandidates({ cat, lat, lng, radius, requiredCount });
-    const top = candidates.slice(offset, offset + pageSize);
-    const totalCount = candidates.length;
-    const hasMore = offset + top.length < totalCount;
+
+    // Same merge as the Explore endpoint, in this endpoint's own item shape.
+    // Custom spots never reach the Google details lookup below — there is
+    // nothing at Google to look up, and asking would burn a paid call.
+    const customCards = (
+      await mapSpots.nearbyMapSpots({ categoryKey: cat.key, lat, lng, radius })
+    ).map(sp => mapSpots.toMapCard(sp, cat.title));
+
+    const totalCount = customCards.length + candidates.length;
+    const customSlice = customCards.slice(offset, offset + pageSize);
+    const googleOffset = Math.max(0, offset - customCards.length);
+    const top = candidates.slice(
+      googleOffset,
+      googleOffset + (pageSize - customSlice.length),
+    );
+    const hasMore = offset + customSlice.length + top.length < totalCount;
 
     const restaurants = await Promise.all(
       top.map(async (p) => {
@@ -1172,7 +1320,8 @@ exports.getRestaurantsByCategory = async (req, res) => {
       pageSize,
       totalCount,
       hasMore,
-      restaurants,
+      // Custom spots first, then Google's, so the order matches Explore's.
+      restaurants: [...customSlice, ...restaurants],
     });
   } catch (e) {
     console.error('getRestaurantsByCategory error', e);

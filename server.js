@@ -85,6 +85,7 @@ const adminChallengeRoutes = require('./routes/adminChallengeRoutes');
 
 app.use('/api', require('./routes/appVersionRoutes'));
 app.use('/api', require('./routes/appReviewRoutes'));
+app.use('/api', require('./routes/mapSpotRoutes'));
 app.use('/api', require('./routes/shopRoutes'));
 app.use('/api', require('./routes/referralRoutes'));
 
@@ -213,6 +214,60 @@ cron.schedule(MSG_CLEANUP_CRON, async () => {
 
 // ---- Daily DB backup cron (02:00 UTC) ----
 const { backup: backupDb } = require('./scripts/backup-db');
+// Pending spot suggestions expire after 21 days, photo and all.
+//
+// Rejected ones follow 7 days after the admin acted. APPROVED rows never go —
+// they are the audit trail behind a live map spot. Runs at 03:00
+// Boston time — after the 02:00 backup, so an accidental purge is recoverable
+// from that night's dump.
+cron.schedule('0 3 * * *', async () => {
+  try {
+    const {
+      SUGGESTION_TTL_DAYS,
+      REJECTED_TTL_DAYS,
+    } = require('./controllers/mapSpotController');
+    const { deleteS3IfOrphanBulk } = require('./utils/s3Cleanup');
+
+    const day = 24 * 60 * 60 * 1000;
+    const pendingCutoff = new Date(Date.now() - SUGGESTION_TTL_DAYS * day);
+    const rejectedCutoff = new Date(Date.now() - REJECTED_TTL_DAYS * day);
+
+    const doomed = await prisma.spotSuggestion.findMany({
+      where: {
+        OR: [
+          { status: 'PENDING', createdAt: { lt: pendingCutoff } },
+          // Rejected ones are timed from when the admin acted, not from when
+          // the user sent them. Measuring from createdAt would make something
+          // rejected on day 20 vanish the next morning, before the reporter
+          // had a chance to read why.
+          { status: 'REJECTED', reviewedAt: { lt: rejectedCutoff } },
+        ],
+      },
+      select: { id: true, imageUrl: true, status: true },
+    });
+    if (!doomed.length) return;
+
+    await prisma.spotSuggestion.deleteMany({
+      where: { id: { in: doomed.map(d => d.id) } },
+    });
+
+    // Rows first, then the photos — the orphan guard counts what is left, so
+    // the other order would see each suggestion still holding its own image.
+    // An approved suggestion's photo lives on in its MapSpot, which is counted
+    // too, so this only ever deletes genuinely unreferenced files.
+    const urls = doomed.map(d => d.imageUrl).filter(Boolean);
+    if (urls.length) await deleteS3IfOrphanBulk(urls);
+
+    const pending = doomed.filter(d => d.status === 'PENDING').length;
+    console.log(
+      `🗑️ Expired ${pending} pending (>${SUGGESTION_TTL_DAYS}d) and ` +
+      `${doomed.length - pending} rejected (>${REJECTED_TTL_DAYS}d) spot suggestion(s)`,
+    );
+  } catch (e) {
+    console.error('Spot suggestion expiry cron failed:', e);
+  }
+});
+
 cron.schedule('0 2 * * *', async () => {
   try {
     await backupDb();

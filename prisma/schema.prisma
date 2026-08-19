@@ -86,6 +86,7 @@ model User {
   communityHistory     CommunityHistory[]
   chatLocks            ChatLock[]
   appReviews           AppReview[]
+  spotSuggestions      SpotSuggestion[]
   notificationRedDot   Boolean               @default(false)
 
   // Admin panel fields
@@ -364,6 +365,10 @@ enum NotificationType {
   COMMUNITY_UNBANNED
   GROUP_BANNED
   GROUP_UNBANNED
+  // A user's suggested spot was published to the map, or turned down with a
+  // reason. Appended at the end on purpose — see the migration note.
+  SPOT_SUGGESTION_APPROVED
+  SPOT_SUGGESTION_REJECTED
 }
 
 model Chat {
@@ -953,4 +958,102 @@ model AppReview {
 
   @@index([hidden, createdAt])
   @@index([rating])
+}
+
+/// A place an admin publishes onto the map themselves — the small spots Google
+/// does not know about.
+///
+/// Deliberately shaped to look like a Google place to everything downstream:
+/// `placeId` is the app-wide identifier and carries an `outspot_` prefix so it
+/// can never collide with a real Google place id, and so any code holding a
+/// place id can tell the two apart with a string check rather than a lookup.
+///
+/// Unlike Google spots there is no price level or review count to derive
+/// points from, so `points` and `radiusMeters` are set by the admin and are
+/// what a check-in here awards.
+model MapSpot {
+  id      Int    @id @default(autoincrement())
+  /// Always "outspot_<id>". Unique so a check-in can look a spot up by it.
+  placeId String @unique @db.VarChar(64)
+
+  name        String  @db.VarChar(200)
+  address     String? @db.VarChar(300)
+  city        String? @db.VarChar(120)
+  /// Explore/Map category key: trending, restaurants, cafes, bars, dessert,
+  /// outdoors, venue-events. Matches the keys in exploreController's CATEGORIES.
+  categoryKey String  @db.VarChar(40)
+  description String? @db.VarChar(1000)
+  imageUrl    String? @db.VarChar(500)
+
+  latitude  Float
+  longitude Float
+
+  /// How close a user must be to check in, and what they earn for it. Both are
+  /// required — a spot with no points configured is not publishable.
+  radiusMeters Int @default(50)
+  points       Int
+
+  /// Hidden spots stay in the table but drop out of every feed.
+  active Boolean @default(true)
+
+  /// Set when this spot grew out of a user's suggestion, so the admin screen
+  /// can show where it came from. Plain int, no foreign key: deleting the
+  /// suggestion later must not cascade into a live map spot.
+  fromSuggestionId Int?
+  createdByAdmin   String? @db.VarChar(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryKey, active])
+  @@index([active, latitude, longitude])
+  @@index([imageUrl]) // orphan-guard scan (utils/s3Cleanup.js)
+}
+
+/// A place a user submitted from Explore while standing at it.
+///
+/// `latitude`/`longitude` are taken from the device at submission time and are
+/// never editable afterwards — the whole point is that the reporter was there.
+/// One per user per day, enforced by the API rather than the schema, because
+/// "today" depends on the server's timezone and a unique index cannot express
+/// it.
+///
+/// Rows are transient: anything still pending 21 days on is deleted by a cron,
+/// along with its photo. Approved suggestions are kept as the audit trail
+/// behind the MapSpot they produced.
+model SpotSuggestion {
+  id     Int  @id @default(autoincrement())
+  userId Int
+
+  name        String  @db.VarChar(200)
+  address     String? @db.VarChar(300)
+  categoryKey String  @db.VarChar(40)
+  note        String? @db.VarChar(1000)
+  /// One photo, uploaded to S3. Nullable so a failed upload does not lose the
+  /// whole submission.
+  imageUrl String? @db.VarChar(500)
+
+  /// Captured on the device at submit time. Not admin-editable.
+  latitude  Float
+  longitude Float
+
+  /// PENDING | APPROVED | REJECTED
+  status String @default("PENDING") @db.VarChar(20)
+
+  /// Shown to the user in the rejection notification, so it is written for
+  /// them to read, not as an internal note.
+  rejectReason String? @db.VarChar(500)
+
+  reviewedAt      DateTime?
+  reviewedByAdmin String?   @db.VarChar(100)
+  /// The spot this became, if approved.
+  mapSpotId Int?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([imageUrl]) // orphan-guard scan (utils/s3Cleanup.js)
 }
