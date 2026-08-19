@@ -1332,16 +1332,104 @@ exports.getRestaurantsByCategory = async (req, res) => {
 // Shared trending renderer for /explore/category/trending/places.
 // Same response envelope as getCategoryPlaces (places[] + page/pageSize/etc),
 // data source = Google textSearch('trending places near me').
+/// The places people actually checked into this week, nearest-week-ranked, as an
+/// ordered list of place ids.
+///
+/// "Trending" has to mean the same thing on every surface. The Explore carousel
+/// is built from check-ins and the map's Trending pill from Google's popularity;
+/// left alone they show different places under the same word. Both now lead with
+/// this list and fill the rest from Google.
+///
+/// Returns ids only — each caller shapes its own cards, and a place here may be
+/// one of ours (`outspot_...`) that Google has never heard of.
+async function weeklyCheckinPlaceIds({ lat, lng, radius, take = 60 }) {
+  try {
+    const since = startOfWeekMonday(new Date());
+
+    const grouped = await prisma.locationPoint.groupBy({
+      by: ['placeId'],
+      where: {
+        createdAt: { gte: since },
+        placeId: { not: null },
+        latitude: { not: null },
+        longitude: { not: null },
+      },
+      _count: { placeId: true },
+      _sum: { points: true },
+      take,
+      orderBy: [
+        { _sum: { points: 'desc' } },
+        { _count: { placeId: 'desc' } },
+      ],
+    });
+    if (!grouped.length) return [];
+
+    // groupBy can't carry coordinates, so read one row per place to test range.
+    const ids = grouped.map(g => g.placeId).filter(Boolean);
+    const rows = await prisma.locationPoint.findMany({
+      where: { placeId: { in: ids }, createdAt: { gte: since } },
+      select: { placeId: true, latitude: true, longitude: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const coords = new Map();
+    for (const r of rows) if (!coords.has(r.placeId)) coords.set(r.placeId, r);
+
+    return ids.filter((id) => {
+      const c = coords.get(id);
+      if (!c || c.latitude == null || c.longitude == null) return false;
+      return haversineMeters({ lat, lng }, { lat: c.latitude, lng: c.longitude }) <= radius;
+    });
+  } catch (e) {
+    // Trending must still render from Google if this half fails.
+    console.error('weeklyCheckinPlaceIds failed', e);
+    return [];
+  }
+}
+
+/// Reorders Google's trending candidates so this week's check-ins lead, and
+/// reports which checked-in places Google doesn't have (ours) so the caller can
+/// build cards for them.
+function leadWithCheckins(candidates, leadIds) {
+  const byId = new Map(candidates.map(p => [p.place_id, p]));
+  const leadSet = new Set(leadIds);
+  return {
+    ordered: [
+      ...leadIds.map(id => byId.get(id)).filter(Boolean),
+      ...candidates.filter(p => !leadSet.has(p.place_id)),
+    ],
+    missingIds: leadIds.filter(id => !byId.has(id)),
+  };
+}
+
 async function _renderTrendingPlaces(req, res, lat, lng, radius) {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const pageSize = Math.max(1, Math.min(50, parseInt(req.query.pageSize, 10) || 20));
   const offset = (page - 1) * pageSize;
 
   const candidates = await getTrendingCandidates({ lat, lng, radius });
-  const totalCount = candidates.length;
-  const slice = candidates.slice(offset, offset + pageSize);
-  // Points computed per-place from Google signals via mapPlace.
-  const items = slice.map(p => ({ ...mapPlace(p, lat, lng), category: 'Trending' }));
+
+  // This week's check-ins lead, exactly as they do on the map and in the feed
+  // carousel — same word, same meaning, same order.
+  const leadIds = await weeklyCheckinPlaceIds({ lat, lng, radius });
+  const { ordered, missingIds } = leadWithCheckins(candidates, leadIds);
+
+  // Checked-in places Google has never heard of: our own spots.
+  const ownCards = [];
+  for (const id of missingIds) {
+    const spot = await mapSpots.findByPlaceId(id);
+    if (spot && spot.active) {
+      ownCards.push({ ...mapSpots.toPlaceCard(spot, lat, lng), category: 'Trending' });
+    }
+  }
+
+  const all = [...ownCards, ...ordered];
+  const totalCount = all.length;
+  const slice = all.slice(offset, offset + pageSize);
+  // Ours are already card-shaped; Google's still need mapPlace.
+  const items = slice.map(p =>
+    p.isCustomSpot ? p : { ...mapPlace(p, lat, lng), category: 'Trending' },
+  );
 
   return res.json({
     // category.points = null — per-place card is the source of truth.
@@ -1363,9 +1451,23 @@ async function _renderTrendingRestaurants(req, res, lat, lng, radius) {
   const offset = (page - 1) * pageSize;
 
   const candidates = await getTrendingCandidates({ lat, lng, radius });
-  const totalCount = candidates.length;
-  const top = candidates.slice(offset, offset + pageSize);
-  const hasMore = offset + top.length < totalCount;
+
+  // Same lead-with-check-ins rule as Explore, so the map's Trending pill and the
+  // feed's Trending carousel show the same places in the same order.
+  const leadIds = await weeklyCheckinPlaceIds({ lat, lng, radius });
+  const { ordered, missingIds } = leadWithCheckins(candidates, leadIds);
+
+  const ownCards = [];
+  for (const id of missingIds) {
+    const spot = await mapSpots.findByPlaceId(id);
+    if (spot && spot.active) ownCards.push(mapSpots.toMapCard(spot, 'Trending'));
+  }
+
+  const totalCount = ownCards.length + ordered.length;
+  const ownSlice = ownCards.slice(offset, offset + pageSize);
+  const googleOffset = Math.max(0, offset - ownCards.length);
+  const top = ordered.slice(googleOffset, googleOffset + (pageSize - ownSlice.length));
+  const hasMore = offset + ownSlice.length + top.length < totalCount;
 
   const restaurants = await Promise.all(top.map(async (p) => {
     const placeId = p.place_id;
@@ -1417,7 +1519,8 @@ async function _renderTrendingRestaurants(req, res, lat, lng, radius) {
     pageSize,
     totalCount,
     hasMore,
-    restaurants,
+    // Ours first, then Google's — same order as Explore.
+    restaurants: [...ownSlice, ...restaurants],
   });
 }
 
@@ -1489,11 +1592,9 @@ const grouped = await prisma.locationPoint.groupBy({
 });
 
 
-    // Nobody checked in near this user since Monday — which is the normal case
-    // in a quiet area, and it left the Explore feed's "Spots Trending This Week"
-    // carousel empty while the map's Trending pill (a different, Google-backed
-    // endpoint) showed plenty. Fall back to the same Google trending list the
-    // map uses so both surfaces agree; `source` says which one answered.
+    // Nobody checked in near this user since Monday. Short-circuit to the same
+    // Google trending list the map uses, so both surfaces agree. A partial
+    // result is topped up further down rather than here.
     if (!grouped.length) {
       const fallback = await trendingFallback({ userId, lat, lng, radius, limit });
       return res.json({
@@ -1657,6 +1758,34 @@ out.push({
       (b.visitCount || 0) - (a.visitCount || 0) ||
       (a.distanceMiles || 0) - (b.distanceMiles || 0)
     );
+
+    // Top up from the map's Google-backed trending list.
+    //
+    // This used to be all-or-nothing — the Google list only appeared when *zero*
+    // check-ins existed. One check-in in a quiet area was therefore enough to
+    // make Explore's carousel show that single card while the map's Trending
+    // pill, reading the other endpoint, showed a full list. Same word,
+    // completely different content.
+    //
+    // Check-ins still come first: they are what "trending this week" actually
+    // means. Google's list only fills the remaining slots, and only with places
+    // not already there.
+    if (out.length < limit) {
+      const seen = new Set(out.map(r => String(r.id)));
+      const filler = await trendingFallback({
+        userId,
+        lat,
+        lng,
+        radius,
+        limit: limit - out.length + seen.size,
+      });
+      for (const f of filler) {
+        if (out.length >= limit) break;
+        if (seen.has(String(f.id))) continue;
+        seen.add(String(f.id));
+        out.push(f);
+      }
+    }
 
     return res.json({
       success: true,
