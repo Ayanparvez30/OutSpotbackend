@@ -1568,9 +1568,16 @@ const grouped = await prisma.locationPoint.groupBy({
       if (dMeters > radius) continue;
 
       // Google details for proper address/phone/website/photo (memoized — this
-      // loop is sequential, one Details call per post otherwise)
+      // loop is sequential, one Details call per post otherwise).
+      //
+      // Skipped entirely for our own spots: Google answers INVALID_ARGUMENT for
+      // an `outspot_` id, which left the card with no photo, address or rating
+      // — and burned a paid Details call to get there.
       let d = null;
-      try { d = await detailsCached(placeId); } catch (e) { d = null; }
+      const ownSpot = await mapSpots.findByPlaceId(placeId);
+      if (!ownSpot) {
+        try { d = await detailsCached(placeId); } catch (e) { d = null; }
+      }
 
       const photoRef = d?.photos?.[0]?.photo_reference || null;
 
@@ -1595,18 +1602,21 @@ const grouped = await prisma.locationPoint.groupBy({
           avatar: await getUserAvatar(u.id),
         });
       }
-const photos = buildPhotosArray(d, 8);
+// Ours carries one admin/reporter photo; Google's carries a gallery.
+const photos = ownSpot
+  ? (ownSpot.imageUrl ? [ownSpot.imageUrl] : [])
+  : buildPhotosArray(d, 8);
 const image = photos[0] || '';
 
 out.push({
   id: String(placeId),
-  name: d?.name || last.placeName || '',
-  address: d?.formatted_address || '',
+  name: ownSpot?.name || d?.name || last.placeName || '',
+  address: ownSpot?.address || d?.formatted_address || '',
   phone: d?.formatted_phone_number || d?.international_phone_number || '',
   website: d?.website || '',
   googleMapsUrl: d?.url || '',
-  lat: d?.geometry?.location?.lat ?? last.latitude,
-  lng: d?.geometry?.location?.lng ?? last.longitude,
+  lat: ownSpot?.latitude ?? d?.geometry?.location?.lat ?? last.latitude,
+  lng: ownSpot?.longitude ?? d?.geometry?.location?.lng ?? last.longitude,
 
   image,
   photos,
@@ -1624,6 +1634,9 @@ out.push({
   types: d?.types || [],
   // Details is already fetched above, so this costs nothing extra.
   accessible: d?.wheelchair_accessible_entrance === true,
+  // Lets the app badge it, and keeps this endpoint's shape in step with the
+  // category endpoints, which already send it.
+  isCustomSpot: !!ownSpot,
 
   visitCount: g._count?.placeId || 0,     
   uniqueUsers: uniqueUsersMap.get(placeId)?.size || 0,
