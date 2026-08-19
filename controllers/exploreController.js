@@ -1682,17 +1682,26 @@ out.push({
 
 // Shared shaper so a redesign card looks identical whichever section served it.
 // Mirrors the object getTopTrendingWeekRestaurants returns.
-function buildSpotCard({ placeId, details: d, fallbackName, fallbackLat, fallbackLng, category, points, distanceMiles, friendsCount, friendsPreview }) {
-  const photos = buildPhotosArray(d, 8);
+/// One card, from either a Google Details payload (`details`) or one of our own
+/// spots (`ownSpot`).
+///
+/// Callers pass `ownSpot` when the place id starts with `outspot_`, and skip the
+/// Google lookup entirely — Google answers INVALID_ARGUMENT for those ids, which
+/// silently produced cards with no photo, no address and default points.
+function buildSpotCard({ placeId, details: d, ownSpot, fallbackName, fallbackLat, fallbackLng, category, points, distanceMiles, friendsCount, friendsPreview }) {
+  // Ours carries a single admin/reporter photo; Google's carries a gallery.
+  const photos = ownSpot
+    ? (ownSpot.imageUrl ? [ownSpot.imageUrl] : [])
+    : buildPhotosArray(d, 8);
   return {
     id: String(placeId),
     placeId: String(placeId),
-    name: d?.name || fallbackName || '',
-    address: d?.formatted_address || '',
+    name: ownSpot?.name || d?.name || fallbackName || '',
+    address: ownSpot?.address || d?.formatted_address || '',
     website: d?.website || '',
     googleMapsUrl: d?.url || '',
-    lat: d?.geometry?.location?.lat ?? fallbackLat,
-    lng: d?.geometry?.location?.lng ?? fallbackLng,
+    lat: ownSpot?.latitude ?? d?.geometry?.location?.lat ?? fallbackLat,
+    lng: ownSpot?.longitude ?? d?.geometry?.location?.lng ?? fallbackLng,
 
     image: photos[0] || '',
     photos,
@@ -1712,6 +1721,7 @@ function buildSpotCard({ placeId, details: d, fallbackName, fallbackLat, fallbac
     // Google exposes this on Details; the card renders a wheelchair glyph when
     // it's true and simply omits it otherwise.
     accessible: d?.wheelchair_accessible_entrance === true,
+    isCustomSpot: !!ownSpot,
 
     points,
     distanceMiles,
@@ -1798,19 +1808,25 @@ exports.getFriendsVisitedRecently = async (req, res) => {
       if (dMeters > radius) continue;
 
       let d = null;
-      try { d = await detailsCached(placeId); } catch (_) { d = null; }
+      const ownSpot = await mapSpots.findByPlaceId(placeId);
+      if (!ownSpot) {
+        try { d = await detailsCached(placeId); } catch (_) { d = null; }
+      }
 
       out.push(buildSpotCard({
         placeId,
         details: d,
+        ownSpot,
         fallbackName: e.latest.placeName,
         fallbackLat: e.latest.latitude,
         fallbackLng: e.latest.longitude,
         category: 'Visited',
-        points: pointsForPlace({
-          priceLevel: d?.price_level,
-          userRatingsTotal: d?.user_ratings_total,
-        }),
+        points: ownSpot
+          ? ownSpot.points
+          : pointsForPlace({
+              priceLevel: d?.price_level,
+              userRatingsTotal: d?.user_ratings_total,
+            }),
         distanceMiles: metersToMiles(dMeters),
         friendsCount: e.friends.size,
         friendsPreview: await previewFriends(e.friends),
@@ -2052,10 +2068,13 @@ exports.getSavedPlaces = async (req, res) => {
     const places = [];
     for (const row of rows) {
       let d = null;
-      try { d = await detailsCached(row.placeId); } catch (_) { d = null; }
+      const ownSpot = await mapSpots.findByPlaceId(row.placeId);
+      if (!ownSpot) {
+        try { d = await detailsCached(row.placeId); } catch (_) { d = null; }
+      }
 
-      const placeLat = d?.geometry?.location?.lat ?? row.latitude;
-      const placeLng = d?.geometry?.location?.lng ?? row.longitude;
+      const placeLat = ownSpot?.latitude ?? d?.geometry?.location?.lat ?? row.latitude;
+      const placeLng = ownSpot?.longitude ?? d?.geometry?.location?.lng ?? row.longitude;
       const distanceMiles =
         hasHere && Number.isFinite(placeLat) && Number.isFinite(placeLng)
           ? metersToMiles(haversineMeters({ lat, lng }, { lat: placeLat, lng: placeLng }))
@@ -2066,14 +2085,19 @@ exports.getSavedPlaces = async (req, res) => {
       places.push(buildSpotCard({
         placeId: row.placeId,
         details: d,
+        ownSpot,
         fallbackName: row.placeName,
         fallbackLat: row.latitude,
         fallbackLng: row.longitude,
         category: 'Saved',
-        points: pointsForPlace({
-          priceLevel: d?.price_level,
-          userRatingsTotal: d?.user_ratings_total,
-        }),
+        // Our spots are worth what the admin set, not what Google's absent
+        // price level would imply.
+        points: ownSpot
+          ? ownSpot.points
+          : pointsForPlace({
+              priceLevel: d?.price_level,
+              userRatingsTotal: d?.user_ratings_total,
+            }),
         distanceMiles,
         friendsCount: friendSet.size,
         friendsPreview: await previewFriends(friendSet),
