@@ -122,43 +122,59 @@
                 <% } %>
               </td>
               <td class="text-end">
-                <!-- One menu rather than three buttons crowding the column. -->
-                <div class="dropdown">
-                  <button class="btn btn-sm btn-outline-primary dropdown-toggle"
-                          data-bs-toggle="dropdown" aria-expanded="false">
-                    Actions
+                <!-- Plain buttons, not a dropdown: the table scrolls
+                     horizontally, and a dropdown opened inside a scroll
+                     container gets clipped by it. -->
+                <div class="d-flex gap-1 justify-content-end">
+                  <button class="btn btn-sm btn-outline-primary"
+                          title="<%= s.imageUrl ? 'Replace photo' : 'Add photo' %>"
+                          data-bs-toggle="modal" data-bs-target="#photo<%= s.id %>">
+                    <i class="bi bi-image"></i>
                   </button>
-                  <ul class="dropdown-menu dropdown-menu-end">
-                    <li>
-                      <button class="dropdown-item" type="button"
-                              data-bs-toggle="modal" data-bs-target="#photo<%= s.id %>">
-                        <i class="bi bi-image me-2"></i><%= s.imageUrl ? 'Replace photo' : 'Add photo' %>
-                      </button>
-                    </li>
-                    <li>
-                      <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/toggle">
-                        <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
-                        <button class="dropdown-item" type="submit">
-                          <i class="bi bi-<%= s.active ? 'eye-slash' : 'eye' %> me-2"></i><%= s.active ? 'Hide from map' : 'Show on map' %>
-                        </button>
-                      </form>
-                    </li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                      <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/delete"
-                            onsubmit="return confirm('Delete &quot;<%= s.name %>&quot; for good? Check-ins already earned are kept.');">
-                        <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
-                        <button class="dropdown-item text-danger" type="submit">
-                          <i class="bi bi-trash me-2"></i>Delete
-                        </button>
-                      </form>
-                    </li>
-                  </ul>
+                  <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/toggle">
+                    <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
+                    <button class="btn btn-sm btn-outline-primary"
+                            title="<%= s.active ? 'Hide from map' : 'Show on map' %>">
+                      <i class="bi bi-<%= s.active ? 'eye-slash' : 'eye' %>"></i>
+                    </button>
+                  </form>
+                  <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/delete"
+                        onsubmit="return confirm('Delete &quot;<%= s.name %>&quot; for good? Check-ins already earned are kept.');">
+                    <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
+                    <button class="btn btn-sm btn-outline-danger" title="Delete">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
                 </div>
               </td>
             </tr>
 
-            <!-- Set or replace this spot's photo -->
+          <% }) %>
+        </tbody>
+      </table>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (totalPages > 1) { %>
+    <% var qs = categoryFilter ? '?category=' + categoryFilter + '&' : '?'; %>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <small class="text-muted">Page <%= page %> of <%= totalPages %> — <%= total %> total</small>
+      <div>
+        <a class="btn btn-sm btn-outline-primary <%= page <= 1 ? 'disabled' : '' %>"
+           href="/admin/locations/map-spots<%= qs %>page=<%= page - 1 %>">Previous</a>
+        <a class="btn btn-sm btn-outline-primary <%= page >= totalPages ? 'disabled' : '' %>"
+           href="/admin/locations/map-spots<%= qs %>page=<%= page + 1 %>">Next</a>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<!-- Modals live outside the table: a <div> inside <tbody> is invalid
+     HTML and the browser relocates it while parsing. -->
+<% if (spots && spots.length) { %>
+  <% spots.forEach(function (s) { %>
+    <!-- Set or replace this spot's photo -->
             <div class="modal fade" id="photo<%= s.id %>" tabindex="-1">
               <div class="modal-dialog">
                 <form method="POST" enctype="multipart/form-data"
@@ -196,26 +212,8 @@
                 </form>
               </div>
             </div>
-          <% }) %>
-        </tbody>
-      </table>
-      </div>
-    <% } %>
-  </div>
-
-  <% if (totalPages > 1) { %>
-    <% var qs = categoryFilter ? '?category=' + categoryFilter + '&' : '?'; %>
-    <div class="card-footer d-flex justify-content-between align-items-center">
-      <small class="text-muted">Page <%= page %> of <%= totalPages %> — <%= total %> total</small>
-      <div>
-        <a class="btn btn-sm btn-outline-primary <%= page <= 1 ? 'disabled' : '' %>"
-           href="/admin/locations/map-spots<%= qs %>page=<%= page - 1 %>">Previous</a>
-        <a class="btn btn-sm btn-outline-primary <%= page >= totalPages ? 'disabled' : '' %>"
-           href="/admin/locations/map-spots<%= qs %>page=<%= page + 1 %>">Next</a>
-      </div>
-    </div>
-  <% } %>
-</div>
+  <% }) %>
+<% } %>
 
 <!-- Add spot -->
 <div class="modal fade" id="addSpot" tabindex="-1">

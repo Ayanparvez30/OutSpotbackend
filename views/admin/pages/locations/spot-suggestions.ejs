@@ -87,18 +87,10 @@
             <% suggestions.forEach(function (s) { %>
               <tr>
                 <td>
-                  <div class="d-flex align-items-center gap-2">
-                    <span class="avatar-sm d-flex align-items-center justify-content-center flex-shrink-0"
-                          style="background:linear-gradient(135deg,#ec4899,#a855f7);font-size:.72rem;font-weight:700;color:#fff">
-                      <%= initials(s.user) %>
-                    </span>
-                    <div class="text-truncate">
-                      <div class="fw-semibold text-truncate"><%= personName(s.user) %></div>
-                      <% if (s.user && s.user.username) { %>
-                        <div class="text-muted small text-truncate">@<%= s.user.username %></div>
-                      <% } %>
-                    </div>
-                  </div>
+                  <div class="fw-semibold"><%= personName(s.user) %></div>
+                  <% if (s.user && s.user.username) { %>
+                    <div class="text-muted small">@<%= s.user.username %></div>
+                  <% } %>
                 </td>
                 <td>
                   <div class="fw-semibold"><%= s.name %></div>
@@ -141,61 +133,68 @@
                   <% } %>
                 </td>
                 <td class="text-end">
-                  <!-- One tidy menu instead of three buttons fighting for the
-                       column, which is what made this row wrap. -->
-                  <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-primary dropdown-toggle"
-                            data-bs-toggle="dropdown" aria-expanded="false">
-                      Actions
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                      <% if (s.status === 'PENDING') { %>
-                        <li>
-                          <button class="dropdown-item" type="button"
-                                  data-bs-toggle="modal" data-bs-target="#approve<%= s.id %>">
-                            <i class="bi bi-check2-circle me-2 text-success"></i>Create spot
-                          </button>
-                        </li>
-                        <li>
-                          <button class="dropdown-item" type="button"
-                                  data-bs-toggle="modal" data-bs-target="#reject<%= s.id %>">
-                            <i class="bi bi-x-circle me-2 text-warning"></i>Reject with reason
-                          </button>
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                      <% } else if (s.status === 'APPROVED') { %>
-                        <li>
-                          <a class="dropdown-item" href="/admin/locations/map-spots">
-                            <i class="bi bi-pin-map me-2"></i>View on map
-                          </a>
-                        </li>
-                      <% } %>
+                  <!-- Plain buttons, not a dropdown: the table scrolls
+                       horizontally, and a dropdown opened inside a scroll
+                       container gets clipped by it. -->
+                  <div class="d-flex gap-1 justify-content-end">
+                    <% if (s.status === 'PENDING') { %>
+                      <button class="btn btn-sm btn-outline-primary" title="Create spot"
+                              data-bs-toggle="modal" data-bs-target="#approve<%= s.id %>">
+                        <i class="bi bi-check2-circle"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-primary" title="Reject with a reason"
+                              data-bs-toggle="modal" data-bs-target="#reject<%= s.id %>">
+                        <i class="bi bi-x-circle"></i>
+                      </button>
+                    <% } else if (s.status === 'APPROVED') { %>
+                      <a class="btn btn-sm btn-outline-primary" title="View on map"
+                         href="/admin/locations/map-spots">
+                        <i class="bi bi-pin-map"></i>
+                      </a>
+                    <% } %>
 
-                      <% if (s.status === 'APPROVED') { %>
-                        <li>
-                          <span class="dropdown-item-text text-muted small">
-                            Live on the map — delete it from Map Spots
-                          </span>
-                        </li>
-                      <% } else { %>
-                        <li>
-                          <form method="POST"
-                                action="/admin/locations/spot-suggestions/<%= s.id %>/delete"
-                                onsubmit="return confirm('Delete &quot;<%= s.name %>&quot; and its photo for good?');">
-                            <input type="hidden" name="back"
-                                   value="/admin/locations/spot-suggestions<%= statusFilter ? '?status=' + statusFilter : '' %>">
-                            <button class="dropdown-item text-danger" type="submit">
-                              <i class="bi bi-trash me-2"></i>Delete
-                            </button>
-                          </form>
-                        </li>
-                      <% } %>
-                    </ul>
+                    <% if (s.status !== 'APPROVED') { %>
+                      <form method="POST" class="d-inline"
+                            action="/admin/locations/spot-suggestions/<%= s.id %>/delete"
+                            onsubmit="return confirm('Delete &quot;<%= s.name %>&quot; and its photo for good?');">
+                        <input type="hidden" name="back"
+                               value="/admin/locations/spot-suggestions<%= statusFilter ? '?status=' + statusFilter : '' %>">
+                        <button class="btn btn-sm btn-outline-danger" title="Delete">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    <% } %>
                   </div>
                 </td>
               </tr>
 
-              <% if (s.status === 'PENDING') { %>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (totalPages > 1) { %>
+    <% var qs = statusFilter ? '?status=' + statusFilter + '&' : '?'; %>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <small class="text-muted">Page <%= page %> of <%= totalPages %></small>
+      <div>
+        <a class="btn btn-sm btn-outline-primary <%= page <= 1 ? 'disabled' : '' %>"
+           href="/admin/locations/spot-suggestions<%= qs %>page=<%= page - 1 %>">Previous</a>
+        <a class="btn btn-sm btn-outline-primary <%= page >= totalPages ? 'disabled' : '' %>"
+           href="/admin/locations/spot-suggestions<%= qs %>page=<%= page + 1 %>">Next</a>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<!-- Modals live outside the table: a <div> inside <tbody> is invalid
+     HTML and the browser relocates it while parsing, which is how a
+     modal ends up half-working. -->
+<% if (suggestions && suggestions.length) { %>
+  <% suggestions.forEach(function (s) { %>
+    <% if (s.status === 'PENDING') { %>
                 <!-- Approve: the admin supplies what the user could not -->
                 <div class="modal fade" id="approve<%= s.id %>" tabindex="-1">
                   <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -339,26 +338,8 @@
                   </div>
                 </div>
               <% } %>
-            <% }) %>
-          </tbody>
-        </table>
-      </div>
-    <% } %>
-  </div>
-
-  <% if (totalPages > 1) { %>
-    <% var qs = statusFilter ? '?status=' + statusFilter + '&' : '?'; %>
-    <div class="card-footer d-flex justify-content-between align-items-center">
-      <small class="text-muted">Page <%= page %> of <%= totalPages %></small>
-      <div>
-        <a class="btn btn-sm btn-outline-primary <%= page <= 1 ? 'disabled' : '' %>"
-           href="/admin/locations/spot-suggestions<%= qs %>page=<%= page - 1 %>">Previous</a>
-        <a class="btn btn-sm btn-outline-primary <%= page >= totalPages ? 'disabled' : '' %>"
-           href="/admin/locations/spot-suggestions<%= qs %>page=<%= page + 1 %>">Next</a>
-      </div>
-    </div>
-  <% } %>
-</div>
+  <% }) %>
+<% } %>
 
 <p class="text-muted small mt-3 mb-0">
   Pending suggestions are deleted automatically after 21 days, and rejected ones
