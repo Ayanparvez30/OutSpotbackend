@@ -5,45 +5,49 @@
   categories.forEach(function (c) { CAT_TITLE[c.key] = c.title; });
 %>
 
-<div class="d-flex justify-content-between align-items-center mb-1">
-  <h4 class="mb-0">Map Spots</h4>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSpot">
-    + Add spot
-  </button>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
+  <div>
+    <h1 class="page-title">Map Spots</h1>
+    <p class="page-subtitle mb-0">
+      Places OutSpot puts on the map itself — the small ones Google doesn't
+      carry. They show up in their category alongside Google's results and can
+      be checked into for the points set here.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/admin/locations/spot-suggestions" class="btn btn-outline-primary">
+      <i class="bi bi-lightbulb me-2"></i>Suggestions
+    </a>
+    <button class="btn btn-gradient" data-bs-toggle="modal" data-bs-target="#addSpot">
+      <i class="bi bi-plus-lg me-2"></i>Add spot
+    </button>
+  </div>
 </div>
-<p class="text-muted">
-  Places OutSpot puts on the map itself — the small ones Google doesn't carry.
-  They appear in their category alongside Google's results and can be checked
-  into for the points set here.
-</p>
 
-<div class="row g-3 mb-4">
-  <div class="col-md-4">
-    <div class="card"><div class="card-body">
-      <div class="text-muted small text-uppercase">Total spots</div>
-      <div class="h2 mb-0"><%= total %></div>
-    </div></div>
-  </div>
-  <div class="col-md-4">
-    <div class="card"><div class="card-body">
-      <div class="text-muted small text-uppercase">Live</div>
-      <div class="h2 mb-0"><%= activeCount %></div>
-    </div></div>
-  </div>
-  <div class="col-md-4">
-    <div class="card"><div class="card-body">
-      <div class="text-muted small text-uppercase">Points on this page</div>
-      <div class="h2 mb-0"><%= totalPoints %></div>
-    </div></div>
-  </div>
+<div class="row g-3 mt-1 mb-4">
+  <% [
+       { label: 'Total spots',         value: total,       icon: 'pin-map' },
+       { label: 'Live',                value: activeCount, icon: 'broadcast' },
+       { label: 'Points on this page', value: totalPoints, icon: 'coin' }
+     ].forEach(function (c) { %>
+    <div class="col-6 col-xl-4">
+      <div class="stat-card">
+        <div class="stat-top">
+          <span class="stat-icon"><i class="bi bi-<%= c.icon %>"></i></span>
+        </div>
+        <div class="stat-value"><%= c.value %></div>
+        <div class="stat-label"><%= c.label %></div>
+      </div>
+    </div>
+  <% }) %>
 </div>
 
 <div class="mb-3">
   <a href="/admin/locations/map-spots"
-     class="btn btn-sm <%= categoryFilter === '' ? 'btn-primary' : 'btn-outline-secondary' %>">All</a>
+     class="btn btn-sm filter-pill rounded-pill <%= categoryFilter === '' ? 'active-all' : '' %>">All</a>
   <% categories.forEach(function (c) { %>
     <a href="/admin/locations/map-spots?category=<%= c.key %>"
-       class="btn btn-sm <%= categoryFilter === c.key ? 'btn-primary' : 'btn-outline-secondary' %>">
+       class="btn btn-sm filter-pill rounded-pill <%= categoryFilter === c.key ? 'active-all' : '' %>">
       <%= c.title %>
     </a>
   <% }) %>
@@ -52,10 +56,14 @@
 <div class="card">
   <div class="card-body p-0">
     <% if (!spots || spots.length === 0) { %>
-      <p class="text-muted text-center py-5 mb-0">
-        No spots yet. Add one, or approve a user's suggestion.
-      </p>
+      <div class="text-center py-5">
+        <i class="bi bi-pin-map" style="font-size:2rem;opacity:.35"></i>
+        <p class="text-muted mt-2 mb-0">
+          No spots yet. Add one, or approve a user's suggestion.
+        </p>
+      </div>
     <% } else { %>
+      <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
         <thead>
           <tr>
@@ -75,8 +83,8 @@
               <td>
                 <% if (s.imageUrl) { %>
                   <a href="<%= s.imageUrl %>" target="_blank" rel="noopener">
-                    <img src="<%= s.imageUrl %>" alt="" class="rounded"
-                         style="width:48px;height:48px;object-fit:cover">
+                    <img src="<%= s.imageUrl %>" alt=""
+                         style="width:52px;height:52px;object-fit:cover;border-radius:10px">
                   </a>
                 <% } else { %><span class="text-muted">—</span><% } %>
               </td>
@@ -92,7 +100,8 @@
                 </div>
               </td>
               <td>
-                <span class="badge bg-secondary">
+                <span class="badge rounded-pill"
+                      style="background:rgba(168,85,247,.16);color:#d8b4fe;font-weight:600">
                   <%= CAT_TITLE[s.categoryKey] || s.categoryKey %>
                 </span>
               </td>
@@ -100,35 +109,51 @@
               <td><%= s.radiusMeters %> m</td>
               <td>
                 <% if (s.fromSuggestionId) { %>
-                  <span class="badge bg-info text-dark">User</span>
+                  <span class="badge rounded-pill" style="background:rgba(56,189,248,.18);color:#7dd3fc;font-weight:600">User</span>
                 <% } else { %>
-                  <span class="badge bg-light text-dark">Admin</span>
+                  <span class="badge rounded-pill" style="background:rgba(148,163,184,.18);color:#cbd5e1;font-weight:600">Admin</span>
                 <% } %>
               </td>
               <td>
                 <% if (s.active) { %>
-                  <span class="badge bg-success">Live</span>
+                  <span class="badge badge-resolved">Live</span>
                 <% } else { %>
-                  <span class="badge bg-dark">Hidden</span>
+                  <span class="badge status-declined">Hidden</span>
                 <% } %>
               </td>
               <td class="text-end">
-                <div class="d-flex gap-1 justify-content-end">
-                  <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/toggle">
-                    <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
-                    <button class="btn btn-sm <%= s.active ? 'btn-outline-dark' : 'btn-outline-success' %>">
-                      <%= s.active ? 'Hide' : 'Show' %>
-                    </button>
-                  </form>
-                  <button class="btn btn-sm btn-outline-secondary"
-                          data-bs-toggle="modal" data-bs-target="#photo<%= s.id %>">
-                    Photo
+                <!-- One menu rather than three buttons crowding the column. -->
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-outline-primary dropdown-toggle"
+                          data-bs-toggle="dropdown" aria-expanded="false">
+                    Actions
                   </button>
-                  <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/delete"
-                        onsubmit="return confirm('Delete &quot;<%= s.name %>&quot; for good? Check-ins already earned are kept.');">
-                    <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
-                    <button class="btn btn-sm btn-outline-danger">Delete</button>
-                  </form>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <button class="dropdown-item" type="button"
+                              data-bs-toggle="modal" data-bs-target="#photo<%= s.id %>">
+                        <i class="bi bi-image me-2"></i><%= s.imageUrl ? 'Replace photo' : 'Add photo' %>
+                      </button>
+                    </li>
+                    <li>
+                      <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/toggle">
+                        <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
+                        <button class="dropdown-item" type="submit">
+                          <i class="bi bi-<%= s.active ? 'eye-slash' : 'eye' %> me-2"></i><%= s.active ? 'Hide from map' : 'Show on map' %>
+                        </button>
+                      </form>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                      <form method="POST" action="/admin/locations/map-spots/<%= s.id %>/delete"
+                            onsubmit="return confirm('Delete &quot;<%= s.name %>&quot; for good? Check-ins already earned are kept.');">
+                        <input type="hidden" name="back" value="<%= '/admin/locations/map-spots' + (categoryFilter ? '?category=' + categoryFilter : '') %>">
+                        <button class="dropdown-item text-danger" type="submit">
+                          <i class="bi bi-trash me-2"></i>Delete
+                        </button>
+                      </form>
+                    </li>
+                  </ul>
                 </div>
               </td>
             </tr>
@@ -174,6 +199,7 @@
           <% }) %>
         </tbody>
       </table>
+      </div>
     <% } %>
   </div>
 
@@ -182,9 +208,9 @@
     <div class="card-footer d-flex justify-content-between align-items-center">
       <small class="text-muted">Page <%= page %> of <%= totalPages %> — <%= total %> total</small>
       <div>
-        <a class="btn btn-sm btn-outline-secondary <%= page <= 1 ? 'disabled' : '' %>"
+        <a class="btn btn-sm btn-outline-primary <%= page <= 1 ? 'disabled' : '' %>"
            href="/admin/locations/map-spots<%= qs %>page=<%= page - 1 %>">Previous</a>
-        <a class="btn btn-sm btn-outline-secondary <%= page >= totalPages ? 'disabled' : '' %>"
+        <a class="btn btn-sm btn-outline-primary <%= page >= totalPages ? 'disabled' : '' %>"
            href="/admin/locations/map-spots<%= qs %>page=<%= page + 1 %>">Next</a>
       </div>
     </div>
@@ -293,7 +319,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="btn btn-primary">Publish spot</button>
+          <button class="btn btn-gradient"><i class="bi bi-plus-lg me-2"></i>Publish spot</button>
         </div>
       </div>
     </form>
