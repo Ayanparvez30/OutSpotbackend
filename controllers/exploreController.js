@@ -3,6 +3,8 @@ const prisma = new PrismaClient();
 const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, detailsCached, textSearch, textSearchAll, photoUrlByRef } = require('../utils/googlePlaces');
 const { addPointsWithMultiplier } = require('../utils/points');
 const mapSpots = require('./mapSpotController');
+const { allowedRadiusFor } = require('../utils/venueGeofence');
+const { assessTravel } = require('../utils/travelPlausibility');
 const { pointsForPlace } = require('../utils/pointsForPlace');
 const uploadToS3 = require('../utils/s3Upload');
 
@@ -624,6 +626,9 @@ exports.recordVisit = async (req, res) => {
     let placeReviewCount = null;
     let placeOpenNow = null;     // null/undefined = hours unknown → allow
     let placeBizStatus = null;
+    // Google's `types` for this place, used to decide whether the viewport may
+    // widen the allowed radius.
+    let placeTypes = [];
     // Set when this placeId is one of ours; drives the radius and the points
     // below, both of which the admin chose rather than Google.
     let customSpot = null;
@@ -653,6 +658,7 @@ exports.recordVisit = async (req, res) => {
       placeReviewCount = d?.user_ratings_total ?? null;
       placeOpenNow = d?.opening_hours?.open_now ?? null; // derived from currentOpeningHours.openNow (same field FE shows)
       placeBizStatus = d?.business_status ?? null;
+      placeTypes = d?.types || [];
     } catch (e) {
       return res.status(502).json({
         awarded: false,
@@ -685,21 +691,55 @@ exports.recordVisit = async (req, res) => {
       { lat: placeLat, lng: placeLng }
     );
 
-    // Accept if user is inside Google's viewport bounding box (handles large
-    // venues — stadiums, malls, parks — where distance to center is misleading).
-    const insideViewport = viewport &&
-      lat >= viewport.southwest.lat && lat <= viewport.northeast.lat &&
-      lng >= viewport.southwest.lng && lng <= viewport.northeast.lng;
+    // Could they have got here from where we last saw them?
+    //
+    // Unlike every other location check here, this one does not read a number
+    // the caller sent — it compares the claim against the server's own record.
+    // An attacker chooses their coordinates freely, but they cannot rewrite
+    // where the server already logged them, so the two have to add up. This is
+    // what closes the "script from a laptop, check in across the world" attack
+    // that the isMocked flag never could.
+    const lastVisit = await prisma.locationPoint.findFirst({
+      where: { userId, latitude: { not: null }, longitude: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { latitude: true, longitude: true, createdAt: true },
+    });
+    const travel = assessTravel({ previous: lastVisit, lat, lng });
+    if (!travel.plausible) {
+      console.warn(
+        `[recordVisit] impossible-travel user=${userId} placeId=${placeId} ` +
+        `${travel.distance}m in ${travel.elapsedSeconds}s = ${travel.speedKmh}km/h`,
+      );
+      return res.status(409).json({
+        awarded: false,
+        reason: 'impossible-travel',
+        message:
+          'That is too far from your last check-in to have travelled in time. ' +
+          'If this is wrong, wait a little and try again.',
+      });
+    }
 
     // Our spots carry their own radius: a park needs more room than a cafe,
     // and there is no Google viewport to fall back on for them.
-    const allowedRadius = customSpot
+    const baseRadius = customSpot
       ? customSpot.radiusMeters
       : MAX_PLACE_DISTANCE_METERS;
 
-    if (!insideViewport && distToPlace > allowedRadius) {
+    // Being anywhere inside Google's viewport rectangle used to bypass the
+    // radius entirely. That rectangle is ~300m x 220m for an ordinary
+    // restaurant (measured on a real place), so the 20m rule was effectively
+    // not running: a check-in from 150m away passed. The viewport is now
+    // honoured only for place types that genuinely are large, and capped —
+    // see utils/venueGeofence.js.
+    const { radius: allowedRadius, reason: radiusReason } = allowedRadiusFor({
+      baseRadius,
+      types: placeTypes,
+      viewport,
+    });
+
+    if (distToPlace > allowedRadius) {
       const dist = Math.round(distToPlace);
-      console.log(`[recordVisit] too-far user=${userId} placeId=${placeId} dist=${dist}m max=${allowedRadius}m viewport=${viewport ? 'present-but-outside' : 'absent'}`);
+      console.log(`[recordVisit] too-far user=${userId} placeId=${placeId} dist=${dist}m max=${allowedRadius}m (${radiusReason})`);
       return res.status(403).json({
         awarded: false,
         reason: 'too-far-from-place',
@@ -772,11 +812,21 @@ exports.recordVisit = async (req, res) => {
     // Evidence photo: prefer the uploaded file (check-in camera capture); fall
     // back to a mediaUrl passed in the body (older clients), else empty string.
     // An upload hiccup must NOT block the check-in / point award.
-    let evidenceUrl = mediaUrl || '';
+    // The photo has to be a file on THIS request.
+    //
+    // `mediaUrl` used to be accepted straight off the request body, so pasting
+    // the S3 URL of a photo that passed last week counted as evidence — for
+    // ever, free, with no camera involved. Whatever gets built on top of the
+    // photo is worth nothing while that path is open, so it is closed here.
+    // Nothing is rejected for lacking a photo yet; that is a separate decision
+    // and needs the app to be ready for it first.
+    let evidenceUrl = '';
     if (req.file) {
       try {
         evidenceUrl = await uploadToS3(req.file, 'points');
       } catch (e) {
+        // Never turn our own upload failure into a lost check-in: the user did
+        // everything right and the cooldown would punish them for our outage.
         console.error('recordVisit: evidence upload failed', e?.message);
       }
     }

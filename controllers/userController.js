@@ -654,6 +654,29 @@ async function submitForPoints(req, res) {
 
   if (!req.file) return res.status(400).json({ error: 'No media uploaded' });
 
+  // The same two gates /explore/visit applies. They were missing here, which
+  // made this the softer of the two award endpoints — the one worth attacking.
+  // Neither is proof of anything (both read a value the caller chose), but
+  // leaving one path stricter than the other only tells an attacker which door
+  // to use.
+  const { isMocked, accuracy } = req.body || {};
+  if (isMocked === true || isMocked === 'true') {
+    return res.status(409).json({
+      awarded: false,
+      reason: 'mocked-location',
+      message: 'Your location looks spoofed. Turn off mock location to check in.',
+    });
+  }
+  const MAX_GPS_ACCURACY_METERS = Number(process.env.MAX_GPS_ACCURACY_METERS || 50);
+  const acc = accuracy != null && accuracy !== '' ? Number(accuracy) : null;
+  if (acc != null && Number.isFinite(acc) && acc > MAX_GPS_ACCURACY_METERS) {
+    return res.status(409).json({
+      awarded: false,
+      reason: 'low-accuracy',
+      message: 'Weak GPS signal — move to open sky and try again.',
+    });
+  }
+
   try {
     // ---- 1-hour rate limit ----
     // Per spec: a user can only submit-for-points once per hour, regardless of
@@ -759,7 +782,21 @@ async function submitForPoints(req, res) {
       const MAX_PLACE_DISTANCE_METERS = Number(process.env.MAX_PLACE_DISTANCE_METERS || 40);
       const uLat = parseFloat(latitude);
       const uLng = parseFloat(longitude);
-      if (Number.isFinite(uLat) && Number.isFinite(uLng)) {
+
+      // Coordinates are required once a placeId is named. They used to be
+      // optional, and the whole distance check sat inside this `if` — so simply
+      // omitting latitude and longitude skipped it and awarded the points. The
+      // other award path (/explore/visit) has always required them; this was
+      // the way round it.
+      if (!Number.isFinite(uLat) || !Number.isFinite(uLng)) {
+        return res.status(400).json({
+          awarded: false,
+          reason: 'location-required',
+          message: 'We could not read your location. Turn location on and try again.',
+        });
+      }
+
+      {
         const check = await validatePlaceDistance({
           placeId: String(placeId).trim(),
           userLat: uLat,

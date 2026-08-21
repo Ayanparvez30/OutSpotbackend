@@ -1,3 +1,4 @@
+const { allowedRadiusFor } = require('./venueGeofence');
 const { details } = require('./googlePlaces');
 
 const toRad = d => (d * Math.PI) / 180;
@@ -39,9 +40,17 @@ async function validatePlaceDistance({ placeId, userLat, userLng, maxMeters }) {
 
   // Accept if user is inside Google's viewport rectangle (large venues — stadiums,
   // malls, parks — where the center pin can be 100+ m from any actual edge).
-  const insideViewport = viewport &&
-    userLat >= viewport.southwest.lat && userLat <= viewport.northeast.lat &&
-    userLng >= viewport.southwest.lng && userLng <= viewport.northeast.lng;
+  // Google's viewport is ~300m x 220m even for an ordinary restaurant, so
+  // accepting anyone inside it made the radius meaningless. It now only widens
+  // the radius for place types that genuinely are large, and is capped — see
+  // utils/venueGeofence.js. Kept as a boolean so the rest of this file and its
+  // `viewportPresent` diagnostic are unchanged.
+  const { radius: effectiveMax } = allowedRadiusFor({
+    baseRadius: maxMeters,
+    types: d?.types || [],
+    viewport,
+  });
+  const insideViewport = distMeters <= effectiveMax && effectiveMax > maxMeters;
 
   if (insideViewport || dist <= maxMeters) {
     // Pass through Google's price + popularity signals so the caller can

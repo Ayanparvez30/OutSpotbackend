@@ -55,6 +55,89 @@
   </div>
 </div>
 
+<!-- Check-ins that look wrong.
+     Hidden entirely when there is nothing to show, so a clean week doesn't
+     leave an empty panel at the top of the dashboard. -->
+<% if (typeof suspiciousCheckIns !== 'undefined' && suspiciousCheckIns.length) { %>
+  <%
+    var KIND = {
+      'cluster-farming':   { label: 'Same building',   icon: 'building', tint: '#fb7185' },
+      'impossible-travel': { label: 'Impossible trip', icon: 'airplane', tint: '#f59e0b' },
+      'reused-photo':      { label: 'Repeated photo',  icon: 'images',   tint: '#a855f7' }
+    };
+    function who(u) {
+      if (!u) return 'Unknown';
+      var n = [u.firstName, u.lastName].filter(Boolean).join(' ');
+      return n || (u.username ? '@' + u.username : 'user #' + u.id);
+    }
+  %>
+  <div class="card mb-3" style="border-color:rgba(251,113,133,.35)">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>
+        <i class="bi bi-shield-exclamation me-2" style="color:#fb7185"></i>
+        Check-ins worth a look
+        <span class="badge rounded-pill ms-2"
+              style="background:rgba(251,113,133,.18);color:#fda4af"><%= suspiciousCheckIns.length %></span>
+      </span>
+      <a href="/admin/locations" class="btn btn-sm btn-outline-primary">Location Points</a>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width:150px">What</th>
+              <th>User</th>
+              <th>Detail</th>
+              <th style="width:80px">Points</th>
+              <th style="width:130px">When</th>
+              <th style="width:120px" class="text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% suspiciousCheckIns.forEach(function (f) { %>
+              <% var k = KIND[f.kind] || { label: f.kind, icon: 'question-circle', tint: '#94a3b8' }; %>
+              <tr>
+                <td>
+                  <span class="badge rounded-pill"
+                        style="background:<%= k.tint %>22;color:<%= k.tint %>;font-weight:600">
+                    <i class="bi bi-<%= k.icon %> me-1"></i><%= k.label %>
+                  </span>
+                </td>
+                <td>
+                  <div class="fw-semibold"><%= who(f.user) %></div>
+                  <div class="text-muted small"><%= f.where %></div>
+                </td>
+                <td class="text-muted small"><%= f.detail %></td>
+                <td><strong><%= f.pointsAwarded %></strong></td>
+                <td><small><%= new Date(f.at).toLocaleString() %></small></td>
+                <td class="text-end">
+                  <!-- Reverses the check-in behind this finding. Posts to the
+                       same endpoint the Location Points page uses, so there is
+                       one code path for taking points back. -->
+                  <form method="POST" class="d-inline"
+                        action="/admin/locations/<%= f.checkInIds[0] %>/delete"
+                        onsubmit="return confirm('Take back these points? The check-in and its photo are kept as the record.');">
+                    <input type="hidden" name="back" value="/admin/dashboard">
+                    <button class="btn btn-sm btn-outline-danger">Take back</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-footer">
+      <small class="text-muted">
+        Found from OutSpot's own check-in records over the last 7 days. Nothing here
+        has been blocked or reversed automatically. Two stops in one building is
+        ordinary and is not listed; four or more is.
+      </small>
+    </div>
+  </div>
+<% } %>
+
 <div class="row g-3">
   <!-- Recent Reports -->
   <div class="col-lg-7">

@@ -1,3 +1,4 @@
+const { reverseCheckIn } = require('../../utils/checkinReversal');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -62,15 +63,25 @@ exports.adjustPoints = async (req, res) => {
   }
 };
 
+/// Takes the points back from a check-in judged to be fake.
+///
+/// This used to be `locationPoint.delete()` and nothing else — the row went, the
+/// user kept the points, and the leaderboard (which sums PointsLedger) never
+/// noticed. So there was no way to act on a fraud report at all.
+///
+/// The row is now zeroed rather than deleted, so the evidence and its photo
+/// survive; see utils/checkinReversal.js for why the ledger's figure is the one
+/// reversed rather than the check-in's.
 exports.removePoint = async (req, res) => {
+  const back = req.body?.back || '/admin/locations';
   try {
-    const id = parseInt(req.params.id);
-    await prisma.locationPoint.delete({ where: { id } });
-    req.flash('success', `Location point #${id} removed.`);
-    res.redirect('/admin/locations');
+    const result = await reverseCheckIn(req.params.id, {
+      adminName: req.session?.admin?.username || 'admin',
+    });
+    req.flash(result.ok ? 'success' : 'error', result.message);
   } catch (error) {
-    console.error('Remove location point error:', error);
-    req.flash('error', 'Failed to remove location point.');
-    res.redirect('/admin/locations');
+    console.error('Reverse check-in error:', error);
+    req.flash('error', 'Failed to reverse that check-in.');
   }
+  res.redirect(back);
 };

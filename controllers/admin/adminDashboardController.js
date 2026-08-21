@@ -1,3 +1,4 @@
+const { findSuspiciousCheckIns } = require('../../utils/checkinSuspicion');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -69,9 +70,15 @@ exports.renderDashboard = async (req, res) => {
       }),
     ]);
 
+    // Check-ins that look wrong, read from the server's own records. Never
+    // blocks anything — an admin reads it and decides. See
+    // utils/checkinSuspicion.js for why these signals and not others.
+    const suspiciousCheckIns = await findSuspiciousCheckIns({ days: 7, limit: 10 });
+
     res.render('admin/pages/dashboard', {
       layout: 'admin/layouts/main',
       title: 'Dashboard',
+      suspiciousCheckIns,
       metrics: {
         totalUsers,
         newUsersToday,
@@ -97,6 +104,7 @@ exports.renderDashboard = async (req, res) => {
       metrics: {},
       recentReports: [],
       recentUsers: [],
+      suspiciousCheckIns: [],
     });
   }
 };
