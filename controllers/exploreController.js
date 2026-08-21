@@ -1,3 +1,4 @@
+const { visitedPlaceIds, hasVisited } = require('../utils/ownVisits');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, detailsCached, textSearch, textSearchAll, photoUrlByRef } = require('../utils/googlePlaces');
@@ -904,6 +905,8 @@ async function customPlaceDetail(placeId, lat, lng, userId) {
     }
   }
 
+  const youVisited = await hasVisited(userId, placeId);
+
   return {
     id: spot.placeId,
     name: spot.name,
@@ -937,6 +940,7 @@ async function customPlaceDetail(placeId, lat, lng, userId) {
     accessible: false,
     friendsCount,
     friendsPreview,
+    youVisited,
     // What a check-in here is worth, since there is no Google price/rating to
     // derive it from.
     points: spot.points,
@@ -979,6 +983,11 @@ exports.getPlaceDetail = async (req, res) => {
         friendsPreview = await previewFriends(visits.map(v => v.userId));
       }
     }
+
+    // And whether the person asking has been here themselves — the half that
+    // was missing, which is why a place someone had visited ten times still
+    // read "be the first of your friends".
+    const youVisited = await hasVisited(userId, placeId);
 
     const photos = buildPhotosArray(d, 8);
     const image = photos[0] || photoUrlByRef(d.photos?.[0]?.photo_reference, 4800) || '';
@@ -1120,6 +1129,7 @@ exports.getPlaceDetail = async (req, res) => {
       accessible: d.wheelchair_accessible_entrance === true,
       friendsCount,
       friendsPreview,
+      youVisited,
     });
   } catch (e) {
     console.error('place detail error', e);
@@ -1715,6 +1725,7 @@ const grouped = await prisma.locationPoint.groupBy({
     // ✅ Build output
     const here = { lat, lng };
     const out = [];
+    const myVisits = await visitedPlaceIds(userId, grouped.map(g => g.placeId));
 
     for (const g of grouped) {
       const placeId = g.placeId;
@@ -1803,6 +1814,7 @@ out.push({
 
   friendsCount,
   friendsPreview,
+  youVisited: myVisits.has(String(placeId)),
 });
 
       if (out.length >= limit) break;
@@ -1874,7 +1886,7 @@ out.push({
 /// Callers pass `ownSpot` when the place id starts with `outspot_`, and skip the
 /// Google lookup entirely — Google answers INVALID_ARGUMENT for those ids, which
 /// silently produced cards with no photo, no address and default points.
-function buildSpotCard({ placeId, details: d, ownSpot, fallbackName, fallbackLat, fallbackLng, category, points, distanceMiles, friendsCount, friendsPreview }) {
+function buildSpotCard({ placeId, details: d, ownSpot, fallbackName, fallbackLat, fallbackLng, category, points, distanceMiles, friendsCount, friendsPreview, youVisited = false }) {
   // Ours carries a single admin/reporter photo; Google's carries a gallery.
   const photos = ownSpot
     ? (ownSpot.imageUrl ? [ownSpot.imageUrl] : [])
@@ -1913,6 +1925,9 @@ function buildSpotCard({ placeId, details: d, ownSpot, fallbackName, fallbackLat
     distanceMiles,
     friendsCount,
     friendsPreview,
+    // Whether *this* user has been here. Kept apart from friendsCount so the
+    // friend avatars stay friends-only and the count isn't inflated by one.
+    youVisited,
   };
 }
 
@@ -1989,6 +2004,10 @@ exports.getFriendsVisitedRecently = async (req, res) => {
     const here = { lat, lng };
     const out = [];
 
+    // One query for the whole page — asking per card would be one round trip
+    // per row for a question the database answers once.
+    const myVisits = await visitedPlaceIds(userId, [...byPlace.keys()]);
+
     for (const [placeId, e] of byPlace) {
       const dMeters = haversineMeters(here, { lat: e.latest.latitude, lng: e.latest.longitude });
       if (dMeters > radius) continue;
@@ -2003,6 +2022,7 @@ exports.getFriendsVisitedRecently = async (req, res) => {
         placeId,
         details: d,
         ownSpot,
+        youVisited: myVisits.has(String(placeId)),
         fallbackName: e.latest.placeName,
         fallbackLat: e.latest.latitude,
         fallbackLng: e.latest.longitude,
@@ -2251,6 +2271,9 @@ exports.getSavedPlaces = async (req, res) => {
       }
     }
 
+    // One query for the page, not one per saved place.
+    const myVisits = await visitedPlaceIds(userId, rows.map(r => r.placeId));
+
     const places = [];
     for (const row of rows) {
       let d = null;
@@ -2272,6 +2295,7 @@ exports.getSavedPlaces = async (req, res) => {
         placeId: row.placeId,
         details: d,
         ownSpot,
+        youVisited: myVisits.has(String(row.placeId)),
         fallbackName: row.placeName,
         fallbackLat: row.latitude,
         fallbackLng: row.longitude,
@@ -2430,6 +2454,12 @@ async function trendingFallback({ userId, lat, lng, radius, limit }) {
     }
   }
 
+  // One query for the page, matching every other feed section.
+  const myVisits = await visitedPlaceIds(
+    userId,
+    picked.map(p => p.place_id).filter(Boolean),
+  );
+
   const out = [];
   for (const p of picked) {
     const mapped = mapPlace(p, lat, lng);
@@ -2448,6 +2478,7 @@ async function trendingFallback({ userId, lat, lng, radius, limit }) {
       pointsCollected: 0,
       friendsCount: friendSet.size,
       friendsPreview: await previewFriends(friendSet),
+      youVisited: myVisits.has(String(mapped.placeId)),
     });
   }
   return out;
