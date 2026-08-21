@@ -1,3 +1,4 @@
+const { readVerticalHint } = require('../utils/verticalHint');
 
 
 const { PrismaClient } = require('@prisma/client');
@@ -837,10 +838,17 @@ async function submitForPoints(req, res) {
         })
       : 5;
 
+    // Same vertical hints the other award path records. Kept in step so the
+    // admin's view of check-ins doesn't have holes that depend on which
+    // endpoint the app happened to use.
+    const { floor, pressureHpa } = readVerticalHint(req.body);
+
     const lp = await prisma.locationPoint.create({
       data: {
         userId,
         mediaUrl,
+        floor,
+        pressureHpa,
         placeId: placeId ? String(placeId).trim() : null,
         placeName,
         latitude: latitude ? parseFloat(latitude) : null,

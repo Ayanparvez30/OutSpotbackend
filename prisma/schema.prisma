@@ -316,6 +316,30 @@ model LocationPoint {
   longitude Float?
   points    Int     @default(5)
 
+  /// Which floor of the building the phone believed it was on.
+  ///
+  /// iOS only, and only inside venues Apple has surveyed — Core Location fills
+  /// `CLLocation.floor` there and `geolocator` already surfaces it. 0 is ground,
+  /// negative is basement. Null everywhere else, which is most of the time:
+  /// Android exposes no equivalent at all.
+  ///
+  /// Recorded, not enforced. GPS cannot separate floors, so this is the only
+  /// direct evidence available for the "five restaurants stacked in one mall"
+  /// case — but it arrives for too few check-ins to gate on without punishing
+  /// Android users for their phone. Collect first, decide once there are
+  /// numbers.
+  floor Int?
+
+  /// Atmospheric pressure in hPa at the moment of the check-in, where the
+  /// phone has a barometer (~5% of Android models; most iPhones).
+  ///
+  /// Cannot give a floor on its own — a floor is ~0.3-0.4 hPa apart, while
+  /// weather and air conditioning move the reading by more than that over a
+  /// day. It only becomes a floor when compared against another reading in the
+  /// same building at the same time, which is exactly what storing it makes
+  /// possible later.
+  pressureHpa Float?
+
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

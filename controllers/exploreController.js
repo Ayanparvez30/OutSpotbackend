@@ -5,6 +5,7 @@ const { addPointsWithMultiplier } = require('../utils/points');
 const mapSpots = require('./mapSpotController');
 const { allowedRadiusFor } = require('../utils/venueGeofence');
 const { assessTravel } = require('../utils/travelPlausibility');
+const { readVerticalHint } = require('../utils/verticalHint');
 const { pointsForPlace } = require('../utils/pointsForPlace');
 const uploadToS3 = require('../utils/s3Upload');
 
@@ -831,10 +832,16 @@ exports.recordVisit = async (req, res) => {
       }
     }
 
+    // Whatever the phone could say about which floor it was on. Recorded only —
+    // see utils/verticalHint.js for why neither signal is good enough to gate.
+    const { floor, pressureHpa } = readVerticalHint(req.body);
+
     const created = await prisma.locationPoint.create({
       data: {
         userId,
         mediaUrl: evidenceUrl,
+        floor,
+        pressureHpa,
         placeId,
         placeName: (name && String(name).trim()) || placeNameFromGoogle || null,
         placeType: cat?.title || null,

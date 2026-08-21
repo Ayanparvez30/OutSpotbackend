@@ -1,77 +1,195 @@
+<%- include('../../partials/flash') %>
+
 <%
-  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  function userCell(u){
-    if (!u) return '-';
-    const av = (u.minime && u.minime[0] && u.minime[0].avatarUrl) || null;
-    const nm = u.username || '';
-    const initials = (nm || '?').trim().slice(0, 2).toUpperCase();
-    const img = av
-      ? `<img src="${esc(av)}" class="user-avatar" alt="">`
-      : `<span class="user-avatar-fallback">${esc(initials)}</span>`;
-    return `<a href="/admin/users/${u.id}" class="user-cell">${img}<span class="user-name">@${esc(nm)}</span></a>`;
+  function who(u) {
+    if (!u) return 'Unknown';
+    var n = [u.firstName, u.lastName].filter(Boolean).join(' ');
+    return n || (u.username ? '@' + u.username : 'user #' + u.id);
   }
 %>
 
-<div class="d-flex justify-content-between align-items-start mb-3">
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-1">
   <div>
-    <h1 class="page-title">Location Points</h1>
-    <p class="page-subtitle">Points awarded for visiting / capturing real places · <%= total %> total</p>
+    <h1 class="page-title">Check-ins</h1>
+    <p class="page-subtitle mb-0">
+      Every submit-for-points, newest first. Reversing one takes the points back
+      and leaves the record in place.
+    </p>
   </div>
-  <%# Placeholder — not wired up yet (needs a Place model + backend). %>
-  <button type="button" class="btn btn-gradient js-coming-soon align-self-center"><i class="bi bi-plus-lg me-1"></i>Add place</button>
+  <a href="/admin/dashboard" class="btn btn-outline-primary">
+    <i class="bi bi-shield-exclamation me-2"></i>Flagged on dashboard
+  </a>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <%# Placeholder — not wired up yet (needs a place-multiplier model + backend). %>
-  <button type="button" class="btn btn-gradient-warm js-coming-soon"><i class="bi bi-lightning-charge-fill me-2"></i>Add time-based multiplier for a place</button>
-  <form method="GET" action="/admin/locations" class="d-flex gap-2">
-    <input type="text" name="q" class="form-control form-control-sm" placeholder="Search place or user..." value="<%= search %>" style="width:220px">
-    <button class="btn btn-sm btn-primary">Search</button>
+<!-- Filters. Counts are over everything, not the current filter, so they always
+     say how much there is to narrow down to. -->
+<div class="d-flex flex-wrap align-items-center gap-2 mt-3 mb-3">
+  <% [
+       { key: '',          label: 'All',        count: stats.all },
+       { key: 'no-photo',  label: 'No photo',   count: stats.noPhoto },
+       { key: 'has-floor', label: 'Has floor',  count: stats.withFloor },
+       { key: 'reversed',  label: 'Reversed',   count: stats.reversed }
+     ].forEach(function (f) { %>
+    <a href="/admin/locations?filter=<%= f.key %><%= search ? '&q=' + encodeURIComponent(search) : '' %>"
+       class="btn btn-sm filter-pill rounded-pill <%= filter === f.key ? 'active-all' : '' %>">
+      <%= f.label %>
+      <span class="ms-1 opacity-75"><%= f.count %></span>
+    </a>
+  <% }) %>
+
+  <form method="GET" action="/admin/locations" class="ms-auto d-flex gap-2">
+    <% if (filter) { %><input type="hidden" name="filter" value="<%= filter %>"><% } %>
+    <input type="search" name="q" class="form-control form-control-sm"
+           style="width:220px" placeholder="Place, place id or @user"
+           value="<%= search %>">
+    <button class="btn btn-sm btn-outline-primary">Search</button>
   </form>
 </div>
 
 <div class="card">
   <div class="card-body p-0">
-    <table class="table table-hover mb-0 align-middle">
-      <thead>
-        <tr><th>Evidence</th><th>Place</th><th>Points</th><th>By</th><th>When</th><th class="text-end">Actions</th></tr>
-      </thead>
-      <tbody>
-        <% locationPoints.forEach(lp => { %>
-          <tr>
-            <td>
-              <% if (lp.mediaUrl) { %>
-                <a href="<%= lp.mediaUrl %>" target="_blank"><img src="<%= lp.mediaUrl %>" alt="evidence" style="width:48px;height:48px;object-fit:cover;border-radius:8px"></a>
-              <% } else { %>
-                <span class="text-muted small">— No photo</span>
-              <% } %>
-            </td>
-            <td class="fw-semibold"><%= lp.placeName || '-' %></td>
-            <td><%= lp.points %></td>
-            <td><%- userCell(lp.user) %></td>
-            <td><%= lp.createdAt.toLocaleString() %></td>
-            <td>
-              <div class="d-flex justify-content-end gap-2">
-                <button type="button" class="row-action js-edit-points" title="Edit points"
-                        data-id="<%= lp.id %>" data-points="<%= lp.points %>" data-place="<%= lp.placeName || '' %>">
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <form method="POST" action="/admin/locations/<%= lp.id %>/delete" style="display:inline">
-                  <button class="row-action danger" title="Delete" data-confirm="Remove this location point?"><i class="bi bi-trash"></i></button>
-                </form>
-              </div>
-            </td>
-          </tr>
-        <% }) %>
-        <% if (locationPoints.length === 0) { %>
-          <tr><td colspan="6" class="text-center text-muted py-3">No location points found.</td></tr>
-        <% } %>
-      </tbody>
-    </table>
+    <% if (!locationPoints || locationPoints.length === 0) { %>
+      <div class="text-center py-5">
+        <i class="bi bi-geo" style="font-size:2rem;opacity:.35"></i>
+        <p class="text-muted mt-2 mb-0">
+          <%= search || filter ? 'Nothing matches that.' : 'No check-ins yet.' %>
+        </p>
+      </div>
+    <% } else { %>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead>
+            <tr>
+              <th style="width:70px">Photo</th>
+              <th>Place</th>
+              <th>User</th>
+              <th style="width:150px">Where / floor</th>
+              <th style="width:80px">Points</th>
+              <th style="width:140px">When</th>
+              <th style="width:150px" class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% locationPoints.forEach(function (lp) { %>
+              <% var reversed = lp.points === 0; %>
+              <tr class="<%= reversed ? 'table-secondary' : '' %>">
+                <td>
+                  <% if (lp.mediaUrl) { %>
+                    <a href="<%= lp.mediaUrl %>" target="_blank" rel="noopener">
+                      <img src="<%= lp.mediaUrl %>" alt=""
+                           style="width:48px;height:48px;object-fit:cover;border-radius:10px">
+                    </a>
+                  <% } else { %>
+                    <span class="badge rounded-pill"
+                          style="background:rgba(251,113,133,.16);color:#fda4af"
+                          title="This check-in was awarded without a photo">
+                      none
+                    </span>
+                  <% } %>
+                </td>
+                <td>
+                  <div class="fw-semibold"><%= lp.placeName || '—' %></div>
+                  <div class="text-muted small">
+                    <%= lp.placeType || 'Uncategorised' %>
+                    <% if (lp.placeId) { %>
+                      · <code style="font-size:.72rem"><%= lp.placeId.slice(0, 22) %></code>
+                    <% } %>
+                  </div>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <% var av = lp.user && lp.user.minime && lp.user.minime[0]; %>
+                    <% if (av && av.avatarUrl) { %>
+                      <img src="<%= av.avatarUrl %>" alt="" class="avatar-sm">
+                    <% } %>
+                    <div class="text-truncate">
+                      <div class="fw-semibold text-truncate"><%= who(lp.user) %></div>
+                      <% if (lp.user && lp.user.username) { %>
+                        <div class="text-muted small">@<%= lp.user.username %></div>
+                      <% } %>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <% if (lp.latitude != null && lp.longitude != null) { %>
+                    <a class="text-muted small text-decoration-none"
+                       href="https://www.google.com/maps?q=<%= lp.latitude %>,<%= lp.longitude %>"
+                       target="_blank" rel="noopener">
+                      <i class="bi bi-geo-alt"></i>
+                      <%= lp.latitude.toFixed(4) %>, <%= lp.longitude.toFixed(4) %>
+                    </a>
+                  <% } else { %>
+                    <span class="text-muted small">no coordinates</span>
+                  <% } %>
+                  <div class="mt-1">
+                    <% if (lp.floor !== null && lp.floor !== undefined) { %>
+                      <!-- Only iOS reports this, and only inside venues Apple
+                           has surveyed — so its absence means nothing. -->
+                      <span class="badge rounded-pill"
+                            style="background:rgba(56,189,248,.18);color:#7dd3fc;font-weight:600"
+                            title="Reported by the phone (iOS, surveyed venues only)">
+                        <i class="bi bi-layers me-1"></i>floor <%= lp.floor %>
+                      </span>
+                    <% } %>
+                    <% if (lp.pressureHpa) { %>
+                      <span class="text-muted small ms-1"
+                            title="Barometer reading — only comparable against another reading in the same building at the same time">
+                        <%= lp.pressureHpa %> hPa
+                      </span>
+                    <% } %>
+                  </div>
+                </td>
+                <td>
+                  <% if (reversed) { %>
+                    <span class="badge status-declined">reversed</span>
+                  <% } else { %>
+                    <strong><%= lp.points %></strong>
+                  <% } %>
+                </td>
+                <td>
+                  <div class="small"><%= new Date(lp.createdAt).toLocaleDateString() %></div>
+                  <div class="text-muted small">
+                    <%= new Date(lp.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %>
+                  </div>
+                </td>
+                <td class="text-end">
+                  <div class="d-flex gap-1 justify-content-end">
+                    <button class="btn btn-sm btn-outline-primary js-edit-points"
+                            title="Edit points"
+                            data-id="<%= lp.id %>"
+                            data-points="<%= lp.points %>"
+                            data-place="<%= lp.placeName || '' %>">
+                      <i class="bi bi-pencil"></i>
+                    </button>
+                    <% if (!reversed) { %>
+                      <form method="POST" action="/admin/locations/<%= lp.id %>/delete"
+                            onsubmit="return confirm('Take back <%= lp.points %> points from this check-in?\n\nThe record and its photo are kept.');">
+                        <input type="hidden" name="back" value="<%= baseUrl %>">
+                        <button class="btn btn-sm btn-outline-danger" title="Take the points back">
+                          <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                      </form>
+                    <% } %>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
   </div>
 </div>
 
 <%- include('../../partials/pagination', { page, totalPages, baseUrl }) %>
+
+<p class="text-muted small mt-3 mb-0">
+  <strong>Floor</strong> comes from the phone and only iOS reports it, inside
+  venues Apple has surveyed — so a blank floor says nothing either way.
+  <strong>hPa</strong> is a barometer reading; on its own it cannot name a floor,
+  since weather moves it further in a day than one storey does. Both are recorded
+  for later, and neither blocks a check-in.
+</p>
 
 <!-- Edit points modal (posts to the existing /adjust route) -->
 <div class="modal fade" id="editPointsModal" tabindex="-1">
@@ -85,6 +203,10 @@
         <div class="modal-body">
           <label class="form-label">Points</label>
           <input type="number" name="points" id="epPoints" class="form-control" required autofocus>
+          <div class="form-text">
+            Changes the number on the record. To take points off a user's balance,
+            use the reverse button instead.
+          </div>
         </div>
         <div class="modal-footer">
           <button type="submit" class="btn btn-gradient">Save</button>
@@ -104,18 +226,6 @@
         document.getElementById('epPoints').value = btn.dataset.points || '';
         document.getElementById('epPlace').textContent = btn.dataset.place ? '· ' + btn.dataset.place : '';
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
-      });
-    });
-
-    // Placeholder buttons (Add place / time-based multiplier) — show a transient
-    // "coming soon" note instead of navigating, until the backend is built.
-    document.querySelectorAll('.js-coming-soon').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var t = document.createElement('div');
-        t.textContent = '🚧 Coming soon — not wired up yet';
-        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1b1b22;color:#fff;border:1px solid rgba(255,255,255,.14);padding:10px 18px;border-radius:10px;z-index:9999;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.45)';
-        document.body.appendChild(t);
-        setTimeout(function () { t.remove(); }, 2200);
       });
     });
   })();

@@ -15,8 +15,7 @@ const prisma = new PrismaClient();
 /// This is a report, not a gate. Nothing here rejects a check-in or takes points
 /// automatically — an admin looks and decides. Rules that punish on suspicion
 /// alone would hit honest people in exactly the places honest use concentrates:
-/// a family eating twice in the same mall is the normal case in Dhaka, not the
-/// fraud case.
+/// a family eating twice in one mall is the ordinary case, not the fraud case.
 
 /// Two check-ins closer than this are treated as the same building. Sized for a
 /// shopping centre footprint rather than a single shopfront, because that is the
@@ -31,11 +30,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /// Groups a user's check-ins into buildings by simple proximity chaining.
 ///
-/// Deliberately not clustering on Google's `formatted_address`: addresses for
-/// the same Dhaka building are wildly inconsistent ("Level 4, Jamuna Future
-/// Park" and "Ka-244, Kuril, Progoti Sarani" are the same place), so string
-/// matching would both over-merge and under-merge exactly where it matters.
-/// Coordinates do not have that problem.
+/// Deliberately not clustering on Google's `formatted_address`: the same
+/// building yields several different address strings depending on which tenant
+/// Google was describing, so string matching would both over-merge and
+/// under-merge. Coordinates do not have that problem.
 function clusterByProximity(points) {
   const clusters = [];
   for (const p of points) {
@@ -53,6 +51,23 @@ function clusterByProximity(points) {
     else clusters.push({ points: [p] });
   }
   return clusters;
+}
+
+/// A sentence about what the floors say, when the phones happened to report any.
+///
+/// Restaurants stacked in a mall sit on different floors, so a run of check-ins
+/// all reporting the *same* floor is the shape of someone standing still and
+/// tapping. Silent when there is nothing to say — which is most of the time,
+/// since only iOS reports a floor and only in surveyed venues.
+function floorNote(points) {
+  const floors = points.map((p) => p.floor).filter((f) => f !== null && f !== undefined);
+  if (floors.length < 2) return '';
+
+  const distinct = new Set(floors);
+  if (distinct.size === 1) {
+    return ` — all ${floors.length} on floor ${floors[0]}`;
+  }
+  return ` — floors ${[...distinct].sort((a, b) => a - b).join(', ')}`;
 }
 
 /// Users who checked into several *different* places inside one building within
@@ -75,6 +90,7 @@ async function findClusterFarming({ since, alertCount = CLUSTER_ALERT_COUNT }) {
       latitude: true,
       longitude: true,
       points: true,
+      floor: true,
       createdAt: true,
       user: { select: { id: true, username: true, firstName: true, lastName: true } },
     },
@@ -113,7 +129,8 @@ async function findClusterFarming({ since, alertCount = CLUSTER_ALERT_COUNT }) {
         checkInIds: cluster.points.map((p) => p.id),
         detail:
           `${distinct.size} different places in one building within ` +
-          `${Math.max(1, Math.round(spanMs / 3600000))}h`,
+          `${Math.max(1, Math.round(spanMs / 3600000))}h` +
+          floorNote(cluster.points),
       });
     }
   }
@@ -247,6 +264,7 @@ async function findSuspiciousCheckIns({ days = 7, limit = 20 } = {}) {
 }
 
 module.exports = {
+  floorNote,
   findSuspiciousCheckIns,
   findClusterFarming,
   findImpossibleTravel,
