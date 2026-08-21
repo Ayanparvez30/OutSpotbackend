@@ -362,7 +362,16 @@ a.stat-card:hover {
 .sev-low    { background-color: rgba(148, 163, 184, 0.20); color: #cbd5e1; }
 
 /* ---------------- Media helpers (kept from before) ---------------- */
-.avatar-sm { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+/* Minime avatars are full-body renders, not head shots. `object-fit: cover`
+   on a circle crops to the middle of the image, which is the torso — the face
+   is cut off entirely. `contain` with a bottom anchor keeps the whole figure
+   visible, the same treatment `.user-avatar` uses on the dashboard, where
+   these have always looked right. */
+.avatar-sm {
+  width: 34px; height: 40px; border-radius: 10px;
+  object-fit: contain; object-position: center bottom;
+  background: var(--os-surface-2); flex-shrink: 0;
+}
 .avatar-lg { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; }
 .shop-img { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; background: var(--os-surface-2); }
 .submission-img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; }
