@@ -54,4 +54,30 @@ async function hasVisited(userId, placeId) {
   return set.has(String(placeId));
 }
 
-module.exports = { visitedPlaceIds, hasVisited };
+/// This user's own avatar, for the row of faces on a spot card.
+///
+/// The card draws its avatars from `friendsPreview`, which is friends-only — so
+/// a place the user had been to themselves showed the "You visited here" line
+/// beside an empty grey circle. Their own face belongs at the front of that row
+/// for the same reason "You" leads the sentence.
+///
+/// Cached for the lifetime of one request cycle by the caller passing it around
+/// rather than each card fetching it: a feed of twenty cards would otherwise ask
+/// the same question twenty times.
+async function ownAvatar(userId) {
+  if (!userId) return null;
+  try {
+    const m = await prisma.minime.findFirst({
+      where: { userId, isSaved: true },
+      select: { avatarUrl: true, selfieUrl: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+    return m?.avatarUrl || m?.selfieUrl || null;
+  } catch (e) {
+    // A missing avatar is a blank circle, not a broken card.
+    console.error('ownAvatar failed', e);
+    return null;
+  }
+}
+
+module.exports = { visitedPlaceIds, hasVisited, ownAvatar };
