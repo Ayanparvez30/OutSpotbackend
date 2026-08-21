@@ -54,17 +54,22 @@ async function hasVisited(userId, placeId) {
   return set.has(String(placeId));
 }
 
-/// This user's own avatar, for the row of faces on a spot card.
+/// The face to draw for a user — the same rule the rest of the app already uses.
 ///
-/// The card draws its avatars from `friendsPreview`, which is friends-only — so
-/// a place the user had been to themselves showed the "You visited here" line
-/// beside an empty grey circle. Their own face belongs at the front of that row
-/// for the same reason "You" leads the sentence.
+/// "Latest" means the most recently *touched* saved minime, not the most
+/// recently generated one: picking one out of the locker bumps its `updatedAt`
+/// (`userController.selectMinime`) precisely so it sorts first here. Every
+/// profile, chat header, admin list and friend avatar orders by `updatedAt desc`
+/// over `isSaved: true`, so a user's face on a spot card is the same face they
+/// see everywhere else, and changing it changes all of them at once.
 ///
-/// Cached for the lifetime of one request cycle by the caller passing it around
-/// rather than each card fetching it: a feed of twenty cards would otherwise ask
-/// the same question twenty times.
-async function ownAvatar(userId) {
+/// `selfieUrl` is the fallback for an account whose minime was saved before an
+/// avatar was generated for it.
+///
+/// The caller fetches this once per page and passes it down rather than each
+/// card asking: a feed of twenty cards would otherwise repeat one question
+/// twenty times.
+async function latestAvatar(userId) {
   if (!userId) return null;
   try {
     const m = await prisma.minime.findFirst({
@@ -75,9 +80,9 @@ async function ownAvatar(userId) {
     return m?.avatarUrl || m?.selfieUrl || null;
   } catch (e) {
     // A missing avatar is a blank circle, not a broken card.
-    console.error('ownAvatar failed', e);
+    console.error('latestAvatar failed', e);
     return null;
   }
 }
 
-module.exports = { visitedPlaceIds, hasVisited, ownAvatar };
+module.exports = { visitedPlaceIds, hasVisited, latestAvatar };

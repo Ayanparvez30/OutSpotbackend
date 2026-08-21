@@ -1,4 +1,4 @@
-const { visitedPlaceIds, hasVisited, ownAvatar } = require('../utils/ownVisits');
+const { visitedPlaceIds, hasVisited, latestAvatar } = require('../utils/ownVisits');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { nearbyPage, nearbyAll, nearbyByDistance, nearbyByDistanceAll, details, detailsCached, textSearch, textSearchAll, photoUrlByRef } = require('../utils/googlePlaces');
@@ -906,7 +906,7 @@ async function customPlaceDetail(placeId, lat, lng, userId) {
   }
 
   const youVisited = await hasVisited(userId, placeId);
-  const yourAvatar = youVisited ? await ownAvatar(userId) : null;
+  const yourAvatar = youVisited ? await latestAvatar(userId) : null;
 
   return {
     id: spot.placeId,
@@ -990,7 +990,7 @@ exports.getPlaceDetail = async (req, res) => {
     // was missing, which is why a place someone had visited ten times still
     // read "be the first of your friends".
     const youVisited = await hasVisited(userId, placeId);
-    const yourAvatar = youVisited ? await ownAvatar(userId) : null;
+    const yourAvatar = youVisited ? await latestAvatar(userId) : null;
 
     const photos = buildPhotosArray(d, 8);
     const image = photos[0] || photoUrlByRef(d.photos?.[0]?.photo_reference, 4800) || '';
@@ -1620,15 +1620,9 @@ async function getFriendIds(userId) {
   return [...ids];
 }
 
-async function getUserAvatar(userId) {
-  // Optional: latest saved minime avatar
-  const m = await prisma.minime.findFirst({
-    where: { userId, isSaved: true },
-    select: { avatarUrl: true, selfieUrl: true },
-    orderBy: { updatedAt: 'desc' },
-  });
-  return m?.avatarUrl || m?.selfieUrl || null;
-}
+// Friend avatars go through the same helper the reader's own face does, so the
+// row of faces on a card is drawn by one rule rather than two copies of it.
+const getUserAvatar = latestAvatar;
 
 exports.getTopTrendingWeekRestaurants = async (req, res) => {
   try {
@@ -1730,7 +1724,7 @@ const grouped = await prisma.locationPoint.groupBy({
     const here = { lat, lng };
     const out = [];
     const myVisits = await visitedPlaceIds(userId, grouped.map(g => g.placeId));
-    const myAvatar = await ownAvatar(userId);
+    const myAvatar = await latestAvatar(userId);
 
     for (const g of grouped) {
       const placeId = g.placeId;
@@ -2017,7 +2011,7 @@ exports.getFriendsVisitedRecently = async (req, res) => {
     // per row for a question the database answers once. Same for the avatar:
     // fetched once, handed to every card.
     const myVisits = await visitedPlaceIds(userId, [...byPlace.keys()]);
-    const myAvatar = await ownAvatar(userId);
+    const myAvatar = await latestAvatar(userId);
 
     for (const [placeId, e] of byPlace) {
       const dMeters = haversineMeters(here, { lat: e.latest.latitude, lng: e.latest.longitude });
@@ -2285,7 +2279,7 @@ exports.getSavedPlaces = async (req, res) => {
 
     // One query for the page, not one per saved place. Same for the avatar.
     const myVisits = await visitedPlaceIds(userId, rows.map(r => r.placeId));
-    const myAvatar = await ownAvatar(userId);
+    const myAvatar = await latestAvatar(userId);
 
     const places = [];
     for (const row of rows) {
@@ -2473,7 +2467,7 @@ async function trendingFallback({ userId, lat, lng, radius, limit }) {
     userId,
     picked.map(p => p.place_id).filter(Boolean),
   );
-  const myAvatar = await ownAvatar(userId);
+  const myAvatar = await latestAvatar(userId);
 
   const out = [];
   for (const p of picked) {
